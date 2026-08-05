@@ -804,6 +804,67 @@ function mantenimiento(c) {
   return { proxima: iso(p), restan: dias(hoy(), iso(p)) };
 }
 
+function vTaskito() {
+  return `<div class="view">
+  <div class="hrow"><div class="h1">Taskito</div><span class="sub">procesos vivos</span></div>
+  ${D.cultivos.length ? D.cultivos.map(c => {
+    const [lb, col] = estadoCultivo(c), mt = mantenimiento(c);
+    const sub = c.estado === 'nevera'
+      ? `${esc(c.harina)} · ${mt ? (mt.restan < 0 ? 'alimentar ya' : 'alimentar en ' + mt.restan + ' d') : 'sin mantenimiento'}`
+      : `Día ${diaCultivo(c)} de ${c.plan_dias} · ${esc(c.harina)} · ${c.velocidad === 2 ? '2/día' : '1/día'}`;
+    return `<button class="proj" data-cultivo="${c.id}"><div class="ptop">
+      <div class="pic" style="background:${c.estado === 'nevera' ? 'var(--sur2)' : 'var(--mm-bg)'};color:${
+        c.estado === 'nevera' ? 'var(--tx3)' : 'var(--mm)'}">${sv('bread')}</div>
+      <div class="grow"><div class="pnm">${esc(c.nombre)}</div><div class="psb">${sub}</div></div>
+      <span class="chip" style="color:${col}">${lb}</span></div></button>`;
+  }).join('') : '<div class="empty">Sin cultivos todavía.</div>'}
+  <button class="proj" data-act="cultivo-nuevo" style="border-style:dashed"><div class="ptop">
+    <div class="pic" style="background:var(--sur2);color:var(--tx3)">${sv('plus')}</div>
+    <div class="grow"><div class="pnm" style="color:var(--tx3)">Nuevo cultivo</div></div></div></button></div>`;
+}
+
+function calcular() {
+  const c = cul(), when = val('cwhen'), T = parseFloat(val('ctemp'));
+  const out = $('cout');
+  if (!when || !T) { out.innerHTML = '<div class="t2" style="color:var(--dng)">Falta la hora o la temperatura.</div>'; return; }
+  const h = modelo(c).f(T);
+  const objetivo = new Date(when);
+  const alimentar = new Date(objetivo.getTime() - h * 3600e3);
+  const faltan = (alimentar - new Date()) / 3600e3;
+  const fmt = d => d.toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  out.innerHTML = `<div class="card" style="padding:11px 12px;background:var(--sur2);border:none">
+    <div class="t2">Alimentar el</div>
+    <div style="font-size:16px;font-weight:600;margin:3px 0">${fmt(alimentar)}</div>
+    <div class="t2">${h.toFixed(1)} h de fermentación a ${T} °C · ${
+      faltan < 0 ? 'ya pasó, ajusta la hora objetivo'
+      : faltan < 1 ? 'en menos de una hora' : 'en ' + faltan.toFixed(1) + ' h'}</div>
+    <div class="t2" style="margin-top:6px">Ventana de vigilancia: ${fmt(new Date(objetivo.getTime() - 18e5))} → ${fmt(new Date(objetivo.getTime() + 18e5))}</div></div>`;
+}
+
+function chartMM() {
+  const el = $('mmc'); if (!el || !window.Chart) return;
+  const c = cul(), d = conPico(c).map(r => ({ x: +r.temperatura, y: +r.horas_pico }));
+  if (!d.length) return;
+  const m = modelo(c), ts = d.map(p => p.x);
+  const lo = Math.min(...ts) - 1, hi = Math.max(...ts) + 1;
+  const linea = []; for (let T = lo; T <= hi; T += 0.5) linea.push({ x: T, y: m.f(T) });
+  if (ch2) ch2.destroy();
+  ch2 = new Chart(el, {
+    type: 'scatter',
+    data: { datasets: [
+      { data: linea, type: 'line', borderColor: '#4A9FD8', borderWidth: 1.5, pointRadius: 0, tension: .3 },
+      { data: d, backgroundColor: '#F0EDE4', pointRadius: 3.5 }] },
+    options: { plugins: { legend: { display: false }, tooltip: { ...tt(),
+        callbacks: { label: x => ` ${x.parsed.x} °C → ${x.parsed.y.toFixed(1)} h` } } },
+      scales: {
+        x: { grid: { color: '#1C1C19' }, border: { display: false },
+             ticks: { color: '#63615B', font: { family: 'DM Mono', size: 9 } } },
+        y: { grid: { color: '#1C1C19' }, border: { display: false },
+             ticks: { color: '#63615B', font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 5 } }
+      }, animation: { duration: 420 }, maintainAspectRatio: false }
+  });
+}
+
 function vCultivo() {
   const c = cul();
   if (!c) return '<div class="view"><div class="empty">Cultivo no encontrado.</div></div>';
