@@ -9,7 +9,7 @@
 
 do $$
 declare
-  MI_UID uuid := '78ab225d-31e2-4541-b806-0e5bd0fa0c21';  -- ← TU UUID OTRA VEZ
+  MI_UID uuid := '78ab225d-31e2-4541-b806-0e5bd0fa0c21';
 begin
   if MI_UID = '00000000-0000-0000-0000-000000000000' then
     raise exception 'Falta poner tu UUID en MI_UID (línea 11)';

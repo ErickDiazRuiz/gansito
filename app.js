@@ -1,4 +1,4 @@
-import * as api from './db.js';
+import * as api from './supabase.js';
 
 /* ══ helpers ══ */
 const $ = id => document.getElementById(id);

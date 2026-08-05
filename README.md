@@ -26,7 +26,7 @@ Navegador (GitHub Pages) ──supabase-js──► Supabase
 
 1. **Crea tu usuario**: Supabase → Authentication → Users → *Add user* → email + contraseña, marca **Auto Confirm User**.
 2. Copia el **UUID** del usuario recién creado.
-3. Abre `db.sql`, pega ese UUID en la línea `MI_UID :=` (línea 16).
+3. Los tres scripts ya traen tu UUID. No hay que editar nada.
 4. Supabase → SQL Editor → New query → pega todo `db.sql` → **Run**.
 
 > Antes de ejecutar, haz un backup: Database → Backups, o exporta `gastos` a CSV desde el Table Editor. El script mueve tablas y modifica datos.
@@ -57,12 +57,7 @@ Sin esto, PostgREST devuelve 404 en todas las consultas y la web se queda cargan
 
 ## 2. Configuración
 
-Supabase → Settings → API. Copia *Project URL* y *anon public key* en `config.js`:
-
-```js
-export const SUPABASE_URL = 'https://xxxx.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJ...';
-```
+`config.js` ya viene con tu Project URL y tu anon key. No hay que tocarlo.
 
 La anon key es pública por diseño — va en el HTML y cualquiera puede verla. Lo que protege tus datos es RLS: sin sesión iniciada, las consultas devuelven cero filas.
 
@@ -135,7 +130,7 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 | `db2.sql` | Gansirato + módulo de masa madre. Después de `db.sql`. |
 | `db3.sql` | Plan de cultivo y modo nevera. Después de `db2.sql`. |
 | `config.js` | Tus claves de Supabase. |
-| `db.js` | Cliente, auth, lectura paginada, escrituras. |
+| `supabase.js` | Cliente, auth, lectura paginada, escrituras. |
 | `app.js` | Estado, vistas y eventos. |
 | `styles.css` | Tema oscuro y el barrido de navegación. |
 | `index.html` | Estructura y login. |
