@@ -11,6 +11,17 @@ Navegador (GitHub Pages) ──supabase-js──► Supabase
 
 ---
 
+## Módulos
+
+| Módulo | Qué guarda | Esquema |
+|---|---|---|
+| Cashito | Gastos, ingresos, fijos, presupuesto | `cashito` |
+| Gansirato | Mantenimiento de aparatos | `gansirato` |
+| Taskito | Procesos vivos (masa madre) | `taskito` |
+| Plansito | Ideas y planes | `plansito` |
+
+---
+
 ## 1. Base de datos
 
 1. **Crea tu usuario**: Supabase → Authentication → Users → *Add user* → email + contraseña, marca **Auto Confirm User**.
@@ -20,9 +31,15 @@ Navegador (GitHub Pages) ──supabase-js──► Supabase
 
 > Antes de ejecutar, haz un backup: Database → Backups, o exporta `gastos` a CSV desde el Table Editor. El script mueve tablas y modifica datos.
 
+5. Ejecuta después **`db2.sql`** y luego **`db3.sql`** igual que el anterior. `db2.sql` necesita tu UUID otra vez en su línea 11; `db3.sql` no pide nada. El primero renombra el esquema `taskito` a `gansirato` y crea un `taskito` nuevo; el segundo añade el plan de cultivo y el modo nevera.
+
 ### Paso que se olvida y rompe todo
 
-Supabase → **Settings → API → Exposed schemas** → añade `cashito`, `taskito`, `plansito` a la lista (junto a `public`).
+Supabase → **Settings → Data API → Exposed schemas** → la lista debe quedar:
+
+```
+public, graphql_public, cashito, gansirato, taskito, plansito
+```
 
 Sin esto, PostgREST devuelve 404 en todas las consultas y la web se queda cargando.
 
@@ -86,17 +103,9 @@ La app genera URLs firmadas de una hora, así que el bucket sigue privado.
 
 ---
 
-## 5. Apagar Fly
+## 5. Sobre el bot apagado
 
-Cuando la web funcione:
-
-```bash
-fly scale count 0 -a cashito-bot
-```
-
-O borra la app entera desde el panel de Fly. Supabase no se toca — es la misma base.
-
-Lo que se pierde al apagar el bot: el resumen diario automático, el aviso de fijos del día y la alerta al 80% del presupuesto. Eran lo único que necesitaba un proceso corriendo. Si algún día quieres recuperar la alerta, un GitHub Action con `schedule:` la cubre gratis.
+Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos del día y la alerta al 80% del presupuesto. Eran lo único que necesitaba un proceso corriendo. Si algún día quieres recuperar la alerta, un GitHub Action con `schedule:` la cubre gratis.
 
 ---
 
@@ -108,6 +117,12 @@ Lo que se pierde al apagar el bot: el resumen diario automático, el aviso de fi
 
 **Tiempo real.** Cualquier escritura repinta todas las pestañas abiertas por websocket. Si más adelante conectas un ESP32 que escriba en Postgres, la web reacciona sola.
 
+**El plan de la masa madre es feedforward; los registros son el feedback.** Las etapas dan la trayectoria de referencia según velocidad (1 o 2 alimentaciones diarias) y duración (7, 10 o 14 días). Lo que observas y anotas es lo que corrige la estimación real.
+
+**Modo nevera.** Una masa madre no se mantiene activa todo el año. "Guardar en nevera" la duerme y cambia el sistema a mantenimiento semanal: un botón para registrar cada alimentación y un contador de días de retraso. "Despertar" la devuelve a activa — dale 2–3 alimentaciones a temperatura ambiente antes de hornear.
+
+**El modelo de la masa madre.** Con menos de 3 observaciones que tengan temperatura *y* horas al pico, usa un Q10 genérico (6 h a 24 °C, Q10 = 2,5). A partir de la tercera, ajusta una regresión de ln(horas) sobre temperatura con tus propios datos. La calculadora inversa resta las horas estimadas a la hora objetivo para decirte cuándo alimentar.
+
 **Paginación.** `cargarTodo()` pide en bloques de 1000. El bot sumaba sin paginar, así que el balance habría empezado a inflarse silenciosamente al pasar esa cifra.
 
 ---
@@ -116,7 +131,9 @@ Lo que se pierde al apagar el bot: el resumen diario automático, el aviso de fi
 
 | Archivo | Qué es |
 |---|---|
-| `db.sql` | Migración completa. Se ejecuta una vez. |
+| `db.sql` | Migración inicial. Se ejecuta una vez. |
+| `db2.sql` | Gansirato + módulo de masa madre. Después de `db.sql`. |
+| `db3.sql` | Plan de cultivo y modo nevera. Después de `db2.sql`. |
 | `config.js` | Tus claves de Supabase. |
 | `db.js` | Cliente, auth, lectura paginada, escrituras. |
 | `app.js` | Estado, vistas y eventos. |

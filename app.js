@@ -25,7 +25,9 @@ const IC = {
   flask: '<path d="M10 3v6.2L4.6 18a2 2 0 0 0 1.7 3h11.4a2 2 0 0 0 1.7-3L14 9.2V3"/><path d="M8.5 3h7M7.4 14h9.2"/>',
   box: '<path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/>',
   wash: '<rect x="4" y="3" width="16" height="18" rx="2.5"/><circle cx="12" cy="14" r="4"/><path d="M7.5 6.5h.01M11 6.5h.01"/>',
-  tool: '<path d="M14.5 5.5a4.5 4.5 0 0 0 5.9 5.9L21 12l-9 9-3-3 9-9z"/><path d="M8 8 4 4M3 9l6-6"/>'
+  tool: '<path d="M14.5 5.5a4.5 4.5 0 0 0 5.9 5.9L21 12l-9 9-3-3 9-9z"/><path d="M8 8 4 4M3 9l6-6"/>',
+  bread: '<path d="M4 11.5c0-3.6 3.6-5.5 8-5.5s8 1.9 8 5.5c0 1.3-1 2.1-2 2.1v3.6a2.3 2.3 0 0 1-2.3 2.3H8.3A2.3 2.3 0 0 1 6 17.2v-3.6c-1 0-2-.8-2-2.1z"/><path d="M9 9.5c.6 1 .3 2-.4 2.8M13 9.4c.6 1 .3 2-.4 2.8"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>'
 };
 const sv = (n, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w || 1.7}" stroke-linecap="round" stroke-linejoin="round">${IC[n] || IC.box}</svg>`;
 const ICONOS = ['coffee', 'bike', 'wash', 'tool', 'box'];
@@ -47,11 +49,15 @@ const CATC = {
 const colCat = c => CATC[c] || '#7A7872';
 const EST = { idea: ['Idea', '#8B7DDB'], curso: ['En curso', '#F4A261'], hecho: ['Hecho', '#52B788'], desc: ['Descartado', '#63615B'] };
 const MODS = [
-  { id: 'cashito', nm: 'Cashito', ic: 'wallet', ac: '--cash', bg: '--cash-bg' },
-  { id: 'taskito', nm: 'Taskito', ic: 'coffee', ac: '--task', bg: '--task-bg' },
-  { id: 'plansito', nm: 'Plansito', ic: 'bulb', ac: '--plan', bg: '--plan-bg' }
+  { id: 'cashito',   nm: 'Cashito',   ic: 'wallet', ac: '--cash', bg: '--cash-bg' },
+  { id: 'gansirato', nm: 'Gansirato', ic: 'coffee', ac: '--task', bg: '--task-bg' },
+  { id: 'taskito',   nm: 'Taskito',   ic: 'bread',  ac: '--mm',   bg: '--mm-bg' },
+  { id: 'plansito',  nm: 'Plansito',  ic: 'bulb',   ac: '--plan', bg: '--plan-bg' }
 ];
-const ACC = { home: '--task', cashito: '--cash', taskito: '--task', aparato: '--task', plansito: '--plan' };
+const ACC = { home: '--task', cashito: '--cash', gansirato: '--task', aparato: '--task',
+              taskito: '--mm', cultivo: '--mm', plansito: '--plan' };
+const OLORES = [['acido-frutal','Ácido / frutal'],['neutro','Neutro'],['queso','Queso / pies'],
+                ['acetona','Acetona'],['podrido','Podrido']];
 
 /* ══ estado ══ */
 let D = null;
@@ -94,13 +100,14 @@ const vencidas = () => D.aparatos.reduce((n, a) => n + vencidasDe(a), 0);
 
 /* ══ chrome ══ */
 function drawer() {
-  const cur = view === 'aparato' ? 'taskito' : view;
+  const cur = view === 'aparato' ? 'gansirato' : view === 'cultivo' ? 'taskito' : view;
   let h = `<button class="nav ${cur === 'home' ? 'sel' : ''}" data-go="home">
     <div class="ic" style="background:var(--sur2);color:var(--tx2)">${sv('home')}</div><div class="lb">Inicio</div></button>`;
   MODS.forEach(m => {
     let mt = '';
     if (m.id === 'cashito') mt = `<span class="mono">${eur(balance())}</span>`;
-    if (m.id === 'taskito') mt = vencidas() ? `<span class="chip" style="background:var(--task-bg);color:var(--task)">${vencidas()}</span>` : 'al día';
+    if (m.id === 'gansirato') mt = vencidas() ? `<span class="chip" style="background:var(--task-bg);color:var(--task)">${vencidas()}</span>` : 'al día';
+    if (m.id === 'taskito') mt = D.cultivos.length + (D.cultivos.length === 1 ? ' cultivo' : ' cultivos');
     if (m.id === 'plansito') mt = D.planes.filter(p => p.estado === 'curso').length + ' en curso';
     h += `<button class="nav ${cur === m.id ? 'sel' : ''}" data-go="${m.id}">
       <div class="ic" style="background:var(${m.bg});color:var(${m.ac})">${sv(m.ic)}</div>
@@ -112,15 +119,20 @@ function drawer() {
 }
 function crumb() {
   const p = [`<button data-go="home">gansito</button>`];
+  const PADRE = { aparato: 'gansirato', cultivo: 'taskito' };
   if (view !== 'home') {
-    const id = view === 'aparato' ? 'taskito' : view;
-    p.push('<span>/</span>', view === 'aparato'
-      ? `<button data-go="taskito">${id}</button>`
+    const id = PADRE[view] || view;
+    p.push('<span>/</span>', PADRE[view]
+      ? `<button data-go="${id}">${id}</button>`
       : `<span style="color:var(${ACC[view]})">${id}</span>`);
   }
   if (view === 'aparato') {
     const a = ap();
     if (a) p.push('<span>/</span>', `<span style="color:var(--task)">${esc(a.nombre.toLowerCase())}</span>`);
+  }
+  if (view === 'cultivo') {
+    const c = cul();
+    if (c) p.push('<span>/</span>', `<span style="color:var(--mm)">${esc(c.nombre.toLowerCase())}</span>`);
   }
   $('cr').innerHTML = p.join('');
 }
@@ -155,7 +167,7 @@ function vHome() {
   const pct = bud ? Math.min(100, Math.round(sp / bud * 100)) : 0;
   const fx = suma(fijosOn()), v = vencidas();
   return `<div class="view">
-  <div class="proj">
+  <div class="proj tap" data-go="cashito">
     <div class="ptop"><div class="pic" style="background:var(--cash-bg);color:var(--cash)">${sv('wallet')}</div>
       <div class="grow"><div class="pnm">Cashito</div><div class="psb">Gastos e ingresos</div></div>
       <div class="amt" style="color:var(--cash)">${eur(balance())}</div></div>
@@ -165,15 +177,26 @@ function vHome() {
         <div><div class="k">Budget</div><div class="v">${bud ? eur(bud) : '—'}</div></div>
         <div><div class="k">Fijos</div><div class="v">${eur(fx)}</div></div></div>
       <div class="track"><i style="width:${pct}%;background:${pct > 85 ? 'var(--dng)' : 'var(--cash)'}"></i></div>
-      <div class="fl" style="margin-top:11px">
-        <button class="btn" style="flex:1;background:var(--cash);color:#04241A" data-go="cashito">Abrir Cashito</button>
-        <button class="btn btn-q" data-act="gasto-nuevo-home">+ Gasto</button></div></div></div>
+      <button class="btn btn-q" style="width:100%;margin-top:11px" data-act="gasto-nuevo-home">+ Registrar gasto</button>
+    </div></div>
 
-  <button class="proj" data-go="taskito"><div class="ptop">
+  <button class="proj" data-go="gansirato"><div class="ptop">
     <div class="pic" style="background:var(--task-bg);color:var(--task)">${sv('coffee')}</div>
-    <div class="grow"><div class="pnm">Taskito</div><div class="psb">${D.aparatos.length} aparatos</div></div>
+    <div class="grow"><div class="pnm">Gansirato</div><div class="psb">${D.aparatos.length} aparatos</div></div>
     ${v ? `<span class="chip" style="background:var(--task-bg);color:var(--task)">${v} vencida${v > 1 ? 's' : ''}</span>`
       : `<span class="chip" style="color:var(--tx3)">al día</span>`}</div></button>
+
+  <button class="proj" data-go="taskito"><div class="ptop">
+    <div class="pic" style="background:var(--mm-bg);color:var(--mm)">${sv('bread')}</div>
+    <div class="grow"><div class="pnm">Taskito</div><div class="psb">Masa madre</div></div>
+    ${(() => { const c = D.cultivos[0];
+      if (!c) return `<span class="chip" style="color:var(--tx3)">sin cultivos</span>`;
+      if (c.estado === 'nevera') { const mt = mantenimiento(c);
+        return mt && mt.restan < 0
+          ? `<span class="chip" style="background:var(--task-bg);color:var(--task)">alimentar</span>`
+          : `<span class="chip" style="color:var(--tx3)">en nevera</span>`; }
+      return `<span class="chip" style="background:var(--mm-bg);color:var(--mm)">día ${diaCultivo(c)}/${c.plan_dias}</span>`; })()}
+    </div></button>
 
   <button class="proj" data-go="plansito"><div class="ptop">
     <div class="pic" style="background:var(--plan-bg);color:var(--plan)">${sv('bulb')}</div>
@@ -189,7 +212,8 @@ const PERS = [['week', 'Semana'], ['month', 'Mes'], ['last_month', 'Anterior'], 
 const vCashito = () => `<div class="view">
   <div class="hrow"><div class="h1">Cashito</div><span class="sub mono">${eur(balance())}</span></div>
   <div class="ptabs">${TABS.map(([k, l]) => `<button class="ptab ${tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
-  ${tab === 'hoy' ? tHoy() : tab === 'analisis' ? tAnal() : tAjus()}</div>`;
+  ${tab === 'hoy' ? tHoy() : tab === 'analisis' ? tAnal() : tAjus()}
+  <button class="fab" data-act="gasto-nuevo" aria-label="Registrar gasto">${sv('plus', 2)}</button></div>`;
 
 function frecuentes() {
   const lim = new Date(); lim.setDate(lim.getDate() - 30);
@@ -530,9 +554,9 @@ function line() {
 
 /* ── taskito ── */
 const ap = () => D.aparatos.find(a => String(a.id) === String(arg));
-function vTaskito() {
+function vGansirato() {
   return `<div class="view">
-  <div class="hrow"><div class="h1">Taskito</div><span class="sub">${D.aparatos.length} aparatos</span></div>
+  <div class="hrow"><div class="h1">Gansirato</div><span class="sub">${D.aparatos.length} aparatos</span></div>
   ${D.aparatos.map(a => {
     const v = vencidasDe(a), pr = progTareas(a).map(restan).filter(x => x != null).sort((x, y) => x - y)[0];
     return `<button class="proj" data-aparato="${a.id}"><div class="ptop">
@@ -669,7 +693,7 @@ async function saveAparato(id) {
   } catch (e) { fallo(e); }
 }
 async function borrarAparato(id) {
-  try { await api.delAparato(id); D.aparatos = D.aparatos.filter(x => x.id !== id); toast('Aparato eliminado'); close(); go('taskito'); }
+  try { await api.delAparato(id); D.aparatos = D.aparatos.filter(x => x.id !== id); toast('Aparato eliminado'); close(); go('gansirato'); }
   catch (e) { fallo(e); }
 }
 function formTarea(tid) {
@@ -712,6 +736,289 @@ async function borrarTarea(tid) {
   try { await api.delTarea(tid); a.tareas = a.tareas.filter(x => x.id !== tid);
     a.log = a.log.filter(l => l.tarea_id !== tid); toast('Tarea eliminada'); close(); render(); }
   catch (e) { fallo(e); }
+}
+
+/* ══ taskito — procesos vivos ══ */
+const cul = () => D.cultivos.find(c => String(c.id) === String(arg));
+const conPico = c => c.registros.filter(r => r.horas_pico > 0 && r.temperatura != null);
+
+/* Modelo temperatura → horas al pico.
+   Con 3+ observaciones, regresión de ln(horas) sobre temperatura.
+   Antes de eso, Q10 genérico: 6 h a 24 °C, Q10 = 2.5 */
+function modelo(c) {
+  const d = conPico(c);
+  if (d.length < 3) return { tipo: 'q10', n: d.length, f: T => 6 * Math.pow(2.5, (24 - T) / 10) };
+  const n = d.length;
+  const x = d.map(r => +r.temperatura), y = d.map(r => Math.log(+r.horas_pico));
+  const mx = x.reduce((a, b) => a + b) / n, my = y.reduce((a, b) => a + b) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) { num += (x[i] - mx) * (y[i] - my); den += (x[i] - mx) ** 2; }
+  const b = den ? num / den : 0, a = my - b * mx;
+  return { tipo: 'ajuste', n, f: T => Math.exp(a + b * T) };
+}
+/* Plan de cultivo — trayectoria de referencia día a día.
+   Es feedforward: la referencia. Lo que corriges con los registros es el feedback. */
+function etapas(c) {
+  const rapido = c.velocidad === 2;
+  const n = c.plan_dias;
+  const fin1 = rapido ? 1 : 1;
+  const fin2 = rapido ? 3 : 4;
+  const fin3 = rapido ? 5 : 7;
+  return [
+    { hasta: fin1, nom: 'Mezcla inicial', ratio: '50 g harina + 50 g agua',
+      accion: 'Mezcla 50 g de harina con 50 g de agua sin cloro (24–27 °C). Tapa sin cerrar del todo.',
+      esperado: 'Nada visible. Es normal.' },
+    { hasta: fin2, nom: 'Arranque bacteriano', ratio: '1:1:1',
+      accion: `Descarta hasta dejar 50 g. Añade 50 g de harina y 50 g de agua. ${rapido ? 'Dos veces al día, cada 12 h.' : 'Una vez al día.'}`,
+      esperado: 'Burbujas dispersas. Puede haber una falsa subida con olor feo — no la deseches, es fermentación bacteriana temprana.' },
+    { hasta: fin3, nom: 'Transición a levaduras', ratio: '1:1:1',
+      accion: `Misma alimentación. ${rapido ? 'Cada 12 h.' : 'Cada 24 h.'} Anota la temperatura y las horas al pico.`,
+      esperado: 'Actividad irregular. El olor pasa de raro a ácido-frutal. Puede parecer que se muere: es la transición.' },
+    { hasta: n - 1, nom: 'Consolidación', ratio: rapido ? '1:2:2' : '1:1:1',
+      accion: `Diluye más: ${rapido ? '30 g starter + 60 g harina + 60 g agua' : '50 g starter + 50 g harina + 50 g agua'}. ${rapido ? 'Cada 12 h.' : 'Cada 24 h.'}`,
+      esperado: 'Debe duplicar en 4–8 h de forma repetible. Olor ácido-frutal estable, sin licor oscuro antes de alimentar.' },
+    { hasta: 999, nom: 'Validación', ratio: rapido ? '1:2:2' : '1:1:1',
+      accion: 'Alimenta y espera al pico. Haz la prueba de flotación: una cucharadita en agua.',
+      esperado: 'Si flota, está lista para hornear. Si no, sigue alimentando un par de días más.' }
+  ];
+}
+const etapaDe = (c, d) => etapas(c).find(e => d <= e.hasta) || etapas(c).slice(-1)[0];
+const diaCultivo = c => Math.max(1, dias(c.inicio, hoy()) + 1);
+
+function estadoCultivo(c) {
+  const rs = c.registros.filter(r => !r.mantenimiento);
+  if (c.estado === 'nevera') return ['En nevera', 'var(--tx2)'];
+  if (!rs.length) return ['Sin datos', 'var(--tx3)'];
+  const u = rs[0];
+  const listo = rs.slice(0, 3).filter(r => +r.factor >= 2 && r.olor === 'acido-frutal').length >= 2;
+  if (listo && rs.some(r => r.flota)) return ['Lista para hornear', 'var(--cash)'];
+  if (listo) return ['Activa', 'var(--cash)'];
+  if (['podrido', 'acetona'].includes(u.olor)) return ['Revisar', 'var(--dng)'];
+  return ['En desarrollo', 'var(--mm)'];
+}
+/* Mantenimiento en nevera: alimentar cada 7 días */
+function mantenimiento(c) {
+  const base = c.ultima_mant || c.guardado_en;
+  if (!base) return null;
+  const p = new Date(base + 'T12:00'); p.setDate(p.getDate() + 7);
+  return { proxima: iso(p), restan: dias(hoy(), iso(p)) };
+}
+
+function vCultivo() {
+  const c = cul();
+  if (!c) return '<div class="view"><div class="empty">Cultivo no encontrado.</div></div>';
+  const m = modelo(c), rs = c.registros, u = rs.find(r => !r.mantenimiento);
+  const [lb, col] = estadoCultivo(c);
+  const tRef = u && u.temperatura != null ? +u.temperatura : 24;
+  const est = m.f(tRef);
+  const nevera = c.estado === 'nevera';
+  const d = diaCultivo(c), e = etapaDe(c, d), mt = mantenimiento(c);
+  const eta = etapas(c);
+
+  return `<div class="view">
+  <div class="hrow"><div class="h1">${esc(c.nombre)}</div>
+    <span class="sub">${nevera ? 'guardada ' + dstr(c.guardado_en) : 'día ' + d + ' de ' + c.plan_dias}</span></div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="k">Estado</div>
+      <div class="v" style="font-size:15px;color:${col};letter-spacing:-.2px">${lb}</div>
+      <div class="s">${esc(c.harina)} · ${c.hidratacion}%</div></div>
+    ${nevera ? `<div class="kpi"><div class="k">Mantenimiento</div>
+      <div class="v" style="color:${mt && mt.restan < 0 ? 'var(--task)' : 'var(--tx)'}">${
+        mt ? (mt.restan < 0 ? Math.abs(mt.restan) + ' d' : mt.restan + ' d') : '—'}</div>
+      <div class="s">${mt ? (mt.restan < 0 ? 'de retraso' : 'para alimentar') : 'sin registro'}</div></div>`
+    : `<div class="kpi"><div class="k">Pico estimado</div><div class="v">${est.toFixed(1)} h</div>
+      <div class="s">a ${tRef} °C · ${m.tipo === 'q10' ? 'modelo Q10' : 'ajuste con ' + m.n + ' datos'}</div></div>`}</div>
+
+  ${nevera ? `<div class="card mb" style="padding:13px;border-color:var(--bdr2)">
+    <div class="lbl">En nevera</div>
+    <div class="instr">Aliméntala una vez por semana: sácala, descarta hasta dejar 50 g, añade 50 g de harina y 50 g de agua, deja 1–2 h a temperatura ambiente y vuelve a guardarla.
+
+Para hornear: sácala 2 días antes y dale 2–3 alimentaciones a temperatura ambiente hasta que vuelva a duplicar de forma fiable.</div>
+    <div class="fl" style="margin-top:12px">
+      <button class="btn btn-q" style="flex:1" data-act="mant">Alimentación de mantenimiento</button>
+      <button class="btn" style="background:var(--mm);color:#04182B" data-act="despertar">Despertar</button></div></div>`
+  : `<div class="card mb" style="padding:13px">
+    <div class="fl" style="justify-content:space-between;align-items:baseline;margin-bottom:8px">
+      <span class="lbl" style="margin:0">Hoy · día ${d}</span>
+      <span class="chip" style="background:var(--mm-bg);color:var(--mm)">${esc(e.nom)}</span></div>
+    <div class="t1" style="margin-bottom:6px">${esc(e.accion)}</div>
+    <div class="t2">Esperado: ${esc(e.esperado)}</div>
+    <div class="fl" style="margin-top:11px">
+      <span class="chip mono" style="background:var(--sur2);color:var(--tx2)">${esc(e.ratio)}</span>
+      <span class="chip" style="background:var(--sur2);color:var(--tx2)">${c.velocidad === 2 ? '2 alimentaciones/día' : '1 alimentación/día'}</span></div></div>
+
+  <div class="lbl">Plan</div>
+  <div class="card mb">${eta.map((x, i) => {
+    const desde = i === 0 ? 1 : eta[i - 1].hasta + 1;
+    const hasta = Math.min(x.hasta, c.plan_dias);
+    const activa = d >= desde && d <= x.hasta;
+    const pasada = d > x.hasta;
+    return `<div class="row" style="${pasada ? 'opacity:.4' : ''}">
+      <span style="width:6px;height:6px;border-radius:50%;flex:none;background:${
+        activa ? 'var(--mm)' : pasada ? 'var(--cash)' : 'var(--tx3)'}"></span>
+      <div class="grow"><div class="t1"${activa ? ' style="color:var(--mm)"' : ''}>${esc(x.nom)}</div>
+        <div class="t2">${desde === hasta ? 'Día ' + desde : 'Días ' + desde + '–' + hasta} · ${esc(x.ratio)}</div></div>
+      ${activa ? '<span class="chip" style="background:var(--mm-bg);color:var(--mm)">ahora</span>' : ''}</div>`;
+  }).join('')}</div>
+
+  <div class="card mb" style="padding:12px 13px">
+    <div class="lbl">Calculadora de horario</div>
+    <div class="t2 mb">¿A qué hora quieres usarla? Te digo cuándo alimentar.</div>
+    <div class="fl mb"><input id="cwhen" type="datetime-local" style="flex:1">
+      <input id="ctemp" type="number" step="0.5" inputmode="decimal" class="mono" placeholder="°C"
+        value="${tRef}" style="width:78px"></div>
+    <button class="btn btn-q" style="width:100%" data-act="calc">Calcular</button>
+    <div id="cout" style="margin-top:10px"></div></div>
+
+  <div class="fl mb">
+    <button class="btn" style="flex:1;background:var(--mm);color:#04182B" data-act="registro-nuevo">Registrar observación</button>
+    <button class="btn btn-q" data-act="guardar">Guardar en nevera</button></div>`}
+
+  ${conPico(c).length >= 2 ? `<div class="card mb" style="padding:12px">
+    <div class="lbl">Temperatura vs horas al pico</div><div class="lineb"><canvas id="mmc"></canvas></div></div>` : ''}
+
+  <div class="lbl">Historial</div>
+  <div class="card mb">${rs.length ? rs.slice(0, 20).map(r => `<div class="row tap" data-registro="${r.id}">
+    <span style="width:6px;height:6px;border-radius:50%;flex:none;background:${
+      r.mantenimiento ? 'var(--tx3)' : r.olor === 'acido-frutal' ? 'var(--cash)'
+      : ['podrido','acetona'].includes(r.olor) ? 'var(--dng)' : 'var(--tx3)'}"></span>
+    <div class="grow"><div class="t1">${r.mantenimiento ? 'Mantenimiento' : (r.factor ? '×' + (+r.factor).toFixed(1) : '—')}${
+      r.alimentado && !r.mantenimiento ? ' · alimentada' : ''}${r.flota ? ' · flota' : ''}</div>
+      <div class="t2">${dstr(r.fecha)}${r.temperatura != null ? ' · ' + r.temperatura + ' °C' : ''}${
+        r.horas_pico ? ' · pico ' + r.horas_pico + ' h' : ''}${r.nota ? ' · ' + esc(r.nota) : ''}</div></div>
+    ${r.mantenimiento ? '' : `<span class="chip" style="color:var(--tx3)">${esc((OLORES.find(o => o[0] === r.olor) || ['','—'])[1])}</span>`}</div>`).join('')
+    : '<div class="empty">Sin observaciones. Registra la primera.</div>'}</div>
+
+  <button class="btn btn-q" style="width:100%" data-act="cultivo-editar">Editar cultivo</button></div>`;
+}
+
+async function guardarNevera() {
+  const c = cul();
+  try {
+    const u = await api.editCultivo(c.id, { estado: 'nevera', guardado_en: hoy(), ultima_mant: hoy() });
+    Object.assign(c, u);
+    toast('Guardada en nevera', async () => {
+      const v = await api.editCultivo(c.id, { estado: 'activa', guardado_en: null });
+      Object.assign(c, v);
+    });
+    render();
+  } catch (e) { fallo(e); }
+}
+async function despertar() {
+  const c = cul();
+  try {
+    const u = await api.editCultivo(c.id, { estado: 'activa', guardado_en: null });
+    Object.assign(c, u);
+    toast('Despierta. Dale 2–3 alimentaciones antes de hornear.');
+    render();
+  } catch (e) { fallo(e); }
+}
+async function alimentarMant() {
+  const c = cul();
+  try {
+    const r = await api.addRegistro({ cultivo_id: c.id, mantenimiento: true, alimentado: true, nota: 'Mantenimiento semanal' });
+    c.registros.unshift(r);
+    const u = await api.editCultivo(c.id, { ultima_mant: hoy() });
+    Object.assign(c, u);
+    toast('Mantenimiento registrado', async () => {
+      await api.delRegistro(r.id); c.registros = c.registros.filter(x => x.id !== r.id);
+    });
+    render();
+  } catch (e) { fallo(e); }
+}
+
+function formCultivo(id) {
+  const c = id ? D.cultivos.find(x => x.id === id) : null;
+  sheet(c ? 'Editar cultivo' : 'Nuevo cultivo', `
+  <div class="fg"><label>Nombre</label><input id="kn" placeholder="Masa madre" value="${c ? esc(c.nombre) : ''}"></div>
+  <div class="fg"><label>Harina</label><input id="kh" placeholder="Trigo panificable" value="${c ? esc(c.harina) : 'Trigo panificable'}"></div>
+  <div class="fl"><div class="fg" style="width:110px"><label>Hidratación %</label>
+    <input id="kw" type="number" inputmode="numeric" class="mono" value="${c ? c.hidratacion : 100}"></div>
+    <div class="fg" style="width:110px"><label>Ratio</label>
+    <input id="kr" class="mono" placeholder="1:1:1" value="${c ? esc(c.ratio) : '1:1:1'}"></div>
+    <div class="fg grow"><label>Inicio</label><input id="ki" type="date" value="${c ? c.inicio : hoy()}"></div></div>
+  <div class="fg"><label>Velocidad</label><div class="seg" id="segVel">
+    <button data-vel="1" class="${!c || c.velocidad === 1 ? 'on' : ''}">1 al día · más lento</button>
+    <button data-vel="2" class="${c && c.velocidad === 2 ? 'on' : ''}">2 al día · más rápido</button></div>
+    <div class="t2" style="margin-top:4px">Dos alimentaciones aceleran la transición a levaduras, pero exigen estar encima.</div></div>
+  <div class="fg"><label>Duración del plan</label><div class="seg" id="segDur">
+    ${[7, 10, 14].map(n => `<button data-dur="${n}" class="${(c ? c.plan_dias : 10) === n ? 'on' : ''}">${n} días</button>`).join('')}</div></div>
+  <div class="fl" style="margin-top:12px">
+    <button class="btn" style="flex:1;background:var(--mm);color:#04182B" data-save="cultivo" data-id="${id || 0}">Guardar</button>
+    ${c ? `<button class="btn btn-d" data-del="cultivo" data-id="${id}">Eliminar</button>` : ''}</div>`);
+}
+async function saveCultivo(id) {
+  const nombre = val('kn') || 'Masa madre';
+  const o = { nombre, harina: val('kh') || 'Trigo', hidratacion: parseInt(val('kw'), 10) || 100,
+              ratio: val('kr') || '1:1:1', inicio: val('ki') || hoy(),
+              velocidad: window._vel || 1, plan_dias: window._dur || 10 };
+  try {
+    if (id) { const u = await api.editCultivo(id, o); Object.assign(D.cultivos.find(x => x.id === id), u); toast('Cultivo actualizado'); }
+    else { const n = await api.addCultivo(o); D.cultivos.push({ ...n, registros: [] }); toast('Cultivo creado'); }
+    close(); render();
+  } catch (e) { fallo(e); }
+}
+async function borrarCultivo(id) {
+  try { await api.delCultivo(id); D.cultivos = D.cultivos.filter(x => x.id !== id);
+    toast('Cultivo eliminado'); close(); go('taskito'); } catch (e) { fallo(e); }
+}
+function formRegistro(id) {
+  const c = cul(), r = id ? c.registros.find(x => x.id === id) : null;
+  const ahora = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  sheet(r ? 'Editar observación' : 'Nueva observación', `
+  <div class="fg"><label>Cuándo</label><input id="rf" type="datetime-local"
+    value="${r ? new Date(new Date(r.fecha) - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ahora}"></div>
+  <div class="fl"><div class="fg grow"><label>Factor de expansión</label>
+    <input id="rx" type="number" step="0.1" inputmode="decimal" class="mono" placeholder="2.0" value="${r ? (r.factor || '') : ''}"></div>
+    <div class="fg grow"><label>Horas al pico</label>
+    <input id="rp" type="number" step="0.5" inputmode="decimal" class="mono" placeholder="6" value="${r ? (r.horas_pico || '') : ''}"></div>
+    <div class="fg" style="width:90px"><label>Temp °C</label>
+    <input id="rt" type="number" step="0.5" inputmode="decimal" class="mono" placeholder="24" value="${r ? (r.temperatura || '') : ''}"></div></div>
+  <div class="fg"><label>Olor</label><select id="ro">
+    ${OLORES.map(([k, l]) => `<option value="${k}" ${r && r.olor === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+  <div class="fg"><label>Marcas</label><div class="seg" id="segMk">
+    <button data-mk="alimentado" class="${r && r.alimentado ? 'on' : ''}">Alimentada</button>
+    <button data-mk="flota" class="${r && r.flota ? 'on' : ''}">Flota</button></div></div>
+  <div class="fg"><label>Nota</label><input id="rn" placeholder="opcional" value="${r ? esc(r.nota || '') : ''}"></div>
+  <div class="fl" style="margin-top:12px">
+    <button class="btn" style="flex:1;background:var(--mm);color:#04182B" data-save="registro" data-id="${id || 0}">Guardar</button>
+    ${r ? `<button class="btn btn-d" data-del="registro" data-id="${id}">Eliminar</button>` : ''}</div>`);
+  window._mk = { alimentado: !!(r && r.alimentado), flota: !!(r && r.flota) };
+}
+async function saveRegistro(id) {
+  const c = cul();
+  const o = {
+    cultivo_id: c.id,
+    fecha: new Date(val('rf')).toISOString(),
+    factor: parseFloat(val('rx')) || null,
+    horas_pico: parseFloat(val('rp')) || null,
+    temperatura: parseFloat(val('rt')) || null,
+    olor: val('ro') || null,
+    alimentado: !!window._mk.alimentado,
+    flota: window._mk.flota ? true : null,
+    nota: val('rn') || null
+  };
+  try {
+    if (id) {
+      const u = await api.editRegistro(id, o);
+      Object.assign(c.registros.find(x => x.id === id), u);
+      toast('Observación actualizada');
+    } else {
+      const n = await api.addRegistro(o);
+      c.registros.unshift(n);
+      toast('Observación registrada', async () => {
+        await api.delRegistro(n.id); c.registros = c.registros.filter(x => x.id !== n.id);
+      });
+    }
+    c.registros.sort((a, b) => a.fecha < b.fecha ? 1 : -1);
+    close(); render();
+  } catch (e) { fallo(e); }
+}
+async function borrarRegistro(id) {
+  const c = cul();
+  try { await api.delRegistro(id); c.registros = c.registros.filter(x => x.id !== id);
+    toast('Observación eliminada'); close(); render(); } catch (e) { fallo(e); }
 }
 
 /* ── plansito ── */
@@ -779,7 +1086,7 @@ async function borrarPlan(id) {
 
 /* ══ eventos (delegación global) ══ */
 document.addEventListener('click', async ev => {
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-save],[data-del],[data-tipo],[data-ico],[data-est]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dur]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -804,6 +1111,24 @@ document.addEventListener('click', async ev => {
   if (d.tarea) return verTarea(+d.tarea);
   if (d.stock) return ajustarStock(+d.stock, +d.d);
   if (d.plan) return formPlan(+d.plan);
+  if (d.cultivo) return go('cultivo', d.cultivo);
+  if (d.registro) return formRegistro(+d.registro);
+
+  if (d.mk) {
+    window._mk[d.mk] = !window._mk[d.mk];
+    el.classList.toggle('on', window._mk[d.mk]);
+    return;
+  }
+  if (d.vel) {
+    window._vel = +d.vel;
+    $('segVel').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.vel === window._vel));
+    return;
+  }
+  if (d.dur) {
+    window._dur = +d.dur;
+    $('segDur').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.dur === window._dur));
+    return;
+  }
 
   if (d.tipo !== undefined) {
     window._tipo = d.tipo;
@@ -830,7 +1155,8 @@ document.addEventListener('click', async ev => {
     const id = +d.id || 0;
     el.disabled = true;
     const f = { gasto: saveGasto, ingreso: saveIngreso, budget: saveBudget, fijo: saveFijo,
-                aparato: saveAparato, tarea: saveTarea, plan: savePlan }[d.save];
+                aparato: saveAparato, tarea: saveTarea, plan: savePlan,
+                cultivo: saveCultivo, registro: saveRegistro }[d.save];
     await f(id);
     el.disabled = false;
     return;
@@ -838,7 +1164,8 @@ document.addEventListener('click', async ev => {
   if (d.del) {
     const id = +d.id;
     const f = { gasto: borrarGasto, ingreso: borrarIngreso, fijo: borrarFijo,
-                aparato: borrarAparato, tarea: borrarTarea, plan: borrarPlan }[d.del];
+                aparato: borrarAparato, tarea: borrarTarea, plan: borrarPlan,
+                cultivo: borrarCultivo, registro: borrarRegistro }[d.del];
     return f(id);
   }
 
@@ -854,6 +1181,13 @@ document.addEventListener('click', async ev => {
     case 'aparato-editar': return formAparato(ap().id);
     case 'tarea-nueva': return formTarea();
     case 'plan-add': return addPlan();
+    case 'cultivo-nuevo': return formCultivo();
+    case 'cultivo-editar': return formCultivo(cul().id);
+    case 'registro-nuevo': return formRegistro();
+    case 'calc': return calcular();
+    case 'guardar': return guardarNevera();
+    case 'despertar': return despertar();
+    case 'mant': return alimentarMant();
     case 'salir': await api.logout(); return location.reload();
   }
 });
@@ -877,11 +1211,13 @@ function render() {
   const acc = getComputedStyle(document.documentElement).getPropertyValue(ACC[view]).trim();
   document.documentElement.style.setProperty('--sweep', acc || '#52B788');
   const s = $('scan'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go');
-  const v = { home: vHome, cashito: vCashito, taskito: vTaskito, aparato: vAparato, plansito: vPlansito }[view];
+  const v = { home: vHome, cashito: vCashito, gansirato: vGansirato, aparato: vAparato,
+              taskito: vTaskito, cultivo: vCultivo, plansito: vPlansito }[view];
   $('app').innerHTML = v();
   $('mk').style.color = 'var(' + ACC[view] + ')';
   crumb(); drawer();
   if (view === 'cashito' && tab === 'analisis') requestAnimationFrame(() => { donut(); line(); });
+  else if (view === 'cultivo') { if (ch1) { ch1.destroy(); ch1 = null; } requestAnimationFrame(chartMM); }
   else { if (ch1) { ch1.destroy(); ch1 = null; } if (ch2) { ch2.destroy(); ch2 = null; } }
 }
 

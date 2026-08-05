@@ -6,7 +6,8 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 const cash = () => sb.schema('cashito');
-const task = () => sb.schema('taskito');
+const gans = () => sb.schema('gansirato');   // aparatos y mantenimiento
+const task = () => sb.schema('taskito');     // procesos vivos (masa madre)
 const plan = () => sb.schema('plansito');
 
 /* ── auth ── */
@@ -33,18 +34,21 @@ async function all(q, cols, order) {
 
 export async function cargarTodo() {
   const [gastos, ingresos, fijos, items, presupuestos,
-         aparatos, tareas, log, consumibles, videos, planes] = await Promise.all([
+         aparatos, tareas, log, consumibles, videos, planes,
+         cultivos, registros] = await Promise.all([
     all(() => cash().from('gastos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('ingresos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('gastos_fijos'), '*', { col: 'dia_cobro' }),
     all(() => cash().from('items'), '*', { col: 'nombre' }),
     all(() => cash().from('presupuesto'), '*'),
-    all(() => task().from('aparatos'), '*', { col: 'orden' }),
-    all(() => task().from('tareas'), '*', { col: 'orden' }),
-    all(() => task().from('log'), '*', { col: 'fecha', asc: false }),
-    all(() => task().from('consumibles'), '*', { col: 'codigo' }),
-    all(() => task().from('videos'), '*'),
-    all(() => plan().from('planes'), '*', { col: 'created_at', asc: false })
+    all(() => gans().from('aparatos'), '*', { col: 'orden' }),
+    all(() => gans().from('tareas'), '*', { col: 'orden' }),
+    all(() => gans().from('log'), '*', { col: 'fecha', asc: false }),
+    all(() => gans().from('consumibles'), '*', { col: 'codigo' }),
+    all(() => gans().from('videos'), '*'),
+    all(() => plan().from('planes'), '*', { col: 'created_at', asc: false }),
+    all(() => task().from('cultivos'), '*', { col: 'inicio' }),
+    all(() => task().from('registros'), '*', { col: 'fecha', asc: false })
   ]);
 
   // Ensamblar el árbol de Taskito
@@ -61,7 +65,9 @@ export async function cargarTodo() {
       .map(l => ({ ...l, nombre: (tareas.find(t => t.id === l.tarea_id) || {}).nombre }));
   });
 
-  return { gastos, ingresos, fijos, items, presupuestos, aparatos, planes };
+  cultivos.forEach(c => { c.registros = registros.filter(r => r.cultivo_id === c.id); });
+
+  return { gastos, ingresos, fijos, items, presupuestos, aparatos, planes, cultivos };
 }
 
 /* ── escritura ──
@@ -88,27 +94,35 @@ export async function setPresupuesto(year, mes, monto) {
   return one(cash().from('presupuesto').insert({ year, mes, monto }));
 }
 
-export const addLog   = (tarea_id, nota) => one(task().from('log').insert({ tarea_id, nota }));
-export const delLog   = (id)             => task().from('log').delete().eq('id', id);
-export const setStock = (id, stock)      => one(task().from('consumibles').update({ stock }).eq('id', id));
+export const addLog   = (tarea_id, nota) => one(gans().from('log').insert({ tarea_id, nota }));
+export const delLog   = (id)             => gans().from('log').delete().eq('id', id);
+export const setStock = (id, stock)      => one(gans().from('consumibles').update({ stock }).eq('id', id));
 
-export const addAparato  = (a)     => one(task().from('aparatos').insert(a));
-export const editAparato = (id, a) => one(task().from('aparatos').update(a).eq('id', id));
-export const delAparato  = (id)    => task().from('aparatos').delete().eq('id', id);
-export const addTarea    = (t)     => one(task().from('tareas').insert(t));
-export const editTarea   = (id, t) => one(task().from('tareas').update(t).eq('id', id));
-export const delTarea    = (id)    => task().from('tareas').delete().eq('id', id);
+export const addAparato  = (a)     => one(gans().from('aparatos').insert(a));
+export const editAparato = (id, a) => one(gans().from('aparatos').update(a).eq('id', id));
+export const delAparato  = (id)    => gans().from('aparatos').delete().eq('id', id);
+export const addTarea    = (t)     => one(gans().from('tareas').insert(t));
+export const editTarea   = (id, t) => one(gans().from('tareas').update(t).eq('id', id));
+export const delTarea    = (id)    => gans().from('tareas').delete().eq('id', id);
 
 export const addPlan  = (p)     => one(plan().from('planes').insert(p));
 export const editPlan = (id, p) => one(plan().from('planes').update({ ...p, updated_at: new Date().toISOString() }).eq('id', id));
 export const delPlan  = (id)    => plan().from('planes').delete().eq('id', id);
+
+/* ── taskito: cultivos ── */
+export const addCultivo   = (c)     => one(task().from('cultivos').insert(c));
+export const editCultivo  = (id, c) => one(task().from('cultivos').update(c).eq('id', id));
+export const delCultivo   = (id)    => task().from('cultivos').delete().eq('id', id);
+export const addRegistro  = (r)     => one(task().from('registros').insert(r));
+export const editRegistro = (id, r) => one(task().from('registros').update(r).eq('id', id));
+export const delRegistro  = (id)    => task().from('registros').delete().eq('id', id);
 
 /* ── videos ── */
 export async function subirVideo(tarea_id, titulo, file) {
   const path = `${tarea_id}/${Date.now()}_${file.name.replace(/[^\w.\-]/g, '_')}`;
   const { error } = await sb.storage.from('taskito-videos').upload(path, file);
   if (error) throw error;
-  return one(task().from('videos').insert({ tarea_id, titulo, storage_path: path }));
+  return one(gans().from('videos').insert({ tarea_id, titulo, storage_path: path }));
 }
 export async function urlVideo(storage_path) {
   const { data, error } = await sb.storage.from('taskito-videos').createSignedUrl(storage_path, 3600);
@@ -121,7 +135,8 @@ export async function urlVideo(storage_path) {
 export function escuchar(onChange) {
   return sb.channel('gansito')
     .on('postgres_changes', { event: '*', schema: 'cashito' },  onChange)
-    .on('postgres_changes', { event: '*', schema: 'taskito' },  onChange)
+    .on('postgres_changes', { event: '*', schema: 'gansirato' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'taskito' },   onChange)
     .on('postgres_changes', { event: '*', schema: 'plansito' }, onChange)
     .subscribe();
 }
