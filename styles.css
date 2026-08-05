@@ -169,6 +169,8 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .sh-h b{font-size:15px;font-weight:700;letter-spacing:-.3px}
 .sh-h button{color:var(--tx3);font-size:18px;line-height:1;padding:2px 6px}
 .fg{margin-bottom:9px}
+.hint{font-size:10.5px;color:var(--tx3);line-height:1.5;margin-top:5px}
+.hint .chip{margin-right:4px;font-size:9.5px}
 .fg label{display:block;font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:4px}
 .instr{font-size:12px;line-height:1.65;color:var(--tx2);white-space:pre-line}
 video{width:100%;border-radius:var(--rs);background:#000}

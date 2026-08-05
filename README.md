@@ -112,6 +112,8 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 
 **Tiempo real.** Cualquier escritura repinta todas las pestañas abiertas por websocket. Si más adelante conectas un ESP32 que escriba en Postgres, la web reacciona sola.
 
+**Las harinas siguen la nomenclatura alemana.** El número Type mide cenizas (minerales) en mg por 100 g, no proteína: cuanto más alto, más salvado, más microbiota nativa y más actividad. Por eso se arranca con integral o centeno y se mantiene con Type 550. Cada opción del desplegable trae su nota y una etiqueta de si es recomendable — la Type 405 aparece marcada como no recomendada porque está demasiado refinada para sostener un cultivo.
+
 **El plan de la masa madre es feedforward; los registros son el feedback.** Las etapas dan la trayectoria de referencia según velocidad (1 o 2 alimentaciones diarias) y duración (7, 10 o 14 días). Lo que observas y anotas es lo que corrige la estimación real.
 
 **Modo nevera.** Una masa madre no se mantiene activa todo el año. "Guardar en nevera" la duerme y cambia el sistema a mantenimiento semanal: un botón para registrar cada alimentación y un contador de días de retraso. "Despertar" la devuelve a activa — dale 2–3 alimentaciones a temperatura ambiente antes de hornear.
@@ -129,6 +131,7 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 | `db.sql` | Migración inicial. Se ejecuta una vez. |
 | `db2.sql` | Gansirato + módulo de masa madre. Después de `db.sql`. |
 | `db3.sql` | Plan de cultivo y modo nevera. Después de `db2.sql`. |
+| `db4.sql` | Harina de arranque separada. Después de `db3.sql`. |
 | `config.js` | Tus claves de Supabase. |
 | `supabase.js` | Cliente, auth, lectura paginada, escrituras. |
 | `app.js` | Estado, vistas y eventos. |

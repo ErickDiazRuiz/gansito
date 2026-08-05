@@ -56,6 +56,35 @@ const MODS = [
 ];
 const ACC = { home: '--task', cashito: '--cash', gansirato: '--task', aparato: '--task',
               taskito: '--mm', cultivo: '--mm', plansito: '--plan' };
+/* Harinas como se venden en Rewe, Edeka, Aldi, Lidl.
+   El número Type mide cenizas (minerales) en mg/100 g, no proteína:
+   más alto = más salvado = más microbiota nativa y más actividad. */
+const HARINAS = [
+  { id: 'Roggenvollkornmehl',      g: 'arranque', r: 'top',
+    h: 'Centeno integral. El arranque más rápido y fiable: máxima microbiota y enzimas. Si dudas, esta.' },
+  { id: 'Roggenmehl Type 1150',    g: 'arranque', r: 'buena',
+    h: 'Centeno oscuro. Casi tan bueno como el integral y más fácil de encontrar.' },
+  { id: 'Weizenvollkornmehl',      g: 'arranque', r: 'buena',
+    h: 'Trigo integral. Arranque fiable y sabor más suave que el centeno.' },
+  { id: 'Roggenmehl Type 997',     g: 'arranque', r: 'ok',
+    h: 'Centeno claro. Funciona, algo más lento que el 1150.' },
+  { id: 'Weizenmehl Type 1050',    g: 'ambas',    r: 'buena',
+    h: 'Trigo semi-integral. Sirve para arrancar y para mantener. Buen punto medio.' },
+  { id: 'Weizenmehl Type 550',     g: 'mant',     r: 'top',
+    h: 'La harina de pan estándar en Alemania, ~11-12 % proteína. La opción por defecto para mantener.' },
+  { id: 'Weizenmehl Type 812',     g: 'mant',     r: 'buena',
+    h: 'Algo más mineral que la 550. Cultivo un poco más activo, sabor más marcado.' },
+  { id: 'Dinkelmehl Type 630',     g: 'mant',     r: 'ok',
+    h: 'Espelta. Fermenta rápido pero el gluten es frágil: vigila el pico, se pasa antes.' },
+  { id: 'Weizenmehl Type 405',     g: 'mant',     r: 'evitar',
+    h: 'Harina de repostería, muy refinada. Poca ceniza y poca microbiota: el cultivo va lento y flojo. Evítala.' }
+];
+const harinaInfo = id => HARINAS.find(x => x.id === id) || { h: '', r: 'ok' };
+const COLR = { top: 'var(--cash)', buena: 'var(--mm)', ok: 'var(--tx2)', evitar: 'var(--dng)' };
+const LBLR = { top: 'recomendada', buena: 'buena', ok: 'aceptable', evitar: 'no recomendada' };
+const optsHarina = (grupos, sel) => HARINAS.filter(x => grupos.includes(x.g) || x.g === 'ambas')
+  .map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${x.id}</option>`).join('');
+
 const OLORES = [['acido-frutal','Ácido / frutal'],['neutro','Neutro'],['queso','Queso / pies'],
                 ['acetona','Acetona'],['podrido','Podrido']];
 
@@ -766,16 +795,16 @@ function etapas(c) {
   const fin3 = rapido ? 5 : 7;
   return [
     { hasta: fin1, nom: 'Mezcla inicial', ratio: '50 g harina + 50 g agua',
-      accion: 'Mezcla 50 g de harina con 50 g de agua sin cloro (24–27 °C). Tapa sin cerrar del todo.',
+      accion: `Mezcla 50 g de ${c.harina_arranque} con 50 g de agua sin cloro a 24–27 °C. Tapa sin cerrar del todo.`,
       esperado: 'Nada visible. Es normal.' },
     { hasta: fin2, nom: 'Arranque bacteriano', ratio: '1:1:1',
-      accion: `Descarta hasta dejar 50 g. Añade 50 g de harina y 50 g de agua. ${rapido ? 'Dos veces al día, cada 12 h.' : 'Una vez al día.'}`,
+      accion: `Descarta hasta dejar 50 g. Añade 50 g de ${c.harina_arranque} y 50 g de agua. ${rapido ? 'Dos veces al día, cada 12 h.' : 'Una vez al día.'}`,
       esperado: 'Burbujas dispersas. Puede haber una falsa subida con olor feo — no la deseches, es fermentación bacteriana temprana.' },
-    { hasta: fin3, nom: 'Transición a levaduras', ratio: '1:1:1',
-      accion: `Misma alimentación. ${rapido ? 'Cada 12 h.' : 'Cada 24 h.'} Anota la temperatura y las horas al pico.`,
-      esperado: 'Actividad irregular. El olor pasa de raro a ácido-frutal. Puede parecer que se muere: es la transición.' },
+    { hasta: fin3, nom: 'Transición a levaduras', aviso: 'Aquí es donde más gente la tira. Si parece muerta, sigue alimentando: las bacterias iniciales están cediendo el sitio a las levaduras y hay un valle de actividad. Solo se descarta si aparece moho de colores o tonos rosa/naranja.', ratio: '1:1:1',
+      accion: `Cambia a ${c.harina}, misma proporción. ${rapido ? 'Cada 12 h.' : 'Cada 24 h.'} Anota temperatura y horas al pico.`,
+      esperado: 'Actividad irregular. El olor pasa de raro a ácido-frutal. Puede parecer que se muere: es la transición, no la tires.' },
     { hasta: n - 1, nom: 'Consolidación', ratio: rapido ? '1:2:2' : '1:1:1',
-      accion: `Diluye más: ${rapido ? '30 g starter + 60 g harina + 60 g agua' : '50 g starter + 50 g harina + 50 g agua'}. ${rapido ? 'Cada 12 h.' : 'Cada 24 h.'}`,
+      accion: `Diluye más: ${rapido ? '30 g starter + 60 g' : '50 g starter + 50 g'} de ${c.harina} + la misma agua. ${rapido ? 'Cada 12 h.' : 'Cada 24 h.'}`,
       esperado: 'Debe duplicar en 4–8 h de forma repetible. Olor ácido-frutal estable, sin licor oscuro antes de alimentar.' },
     { hasta: 999, nom: 'Validación', ratio: rapido ? '1:2:2' : '1:1:1',
       accion: 'Alimenta y espera al pico. Haz la prueba de flotación: una cucharadita en agua.',
@@ -905,6 +934,7 @@ Para hornear: sácala 2 días antes y dale 2–3 alimentaciones a temperatura am
       <span class="chip" style="background:var(--mm-bg);color:var(--mm)">${esc(e.nom)}</span></div>
     <div class="t1" style="margin-bottom:6px">${esc(e.accion)}</div>
     <div class="t2">Esperado: ${esc(e.esperado)}</div>
+    ${e.aviso ? `<div class="t2" style="margin-top:8px;padding:9px 10px;background:var(--task-bg);color:var(--task);border-radius:8px;line-height:1.5">${esc(e.aviso)}</div>` : ''}
     <div class="fl" style="margin-top:11px">
       <span class="chip mono" style="background:var(--sur2);color:var(--tx2)">${esc(e.ratio)}</span>
       <span class="chip" style="background:var(--sur2);color:var(--tx2)">${c.velocidad === 2 ? '2 alimentaciones/día' : '1 alimentación/día'}</span></div></div>
@@ -993,7 +1023,12 @@ function formCultivo(id) {
   const c = id ? D.cultivos.find(x => x.id === id) : null;
   sheet(c ? 'Editar cultivo' : 'Nuevo cultivo', `
   <div class="fg"><label>Nombre</label><input id="kn" placeholder="Masa madre" value="${c ? esc(c.nombre) : ''}"></div>
-  <div class="fg"><label>Harina</label><input id="kh" placeholder="Trigo panificable" value="${c ? esc(c.harina) : 'Trigo panificable'}"></div>
+  <div class="fg"><label>Harina de arranque · días 1–4</label>
+    <select id="ka">${optsHarina(['arranque'], c ? c.harina_arranque : 'Roggenvollkornmehl')}</select>
+    <div class="hint" id="hka"></div></div>
+  <div class="fg"><label>Harina de mantenimiento · resto</label>
+    <select id="kh">${optsHarina(['mant'], c ? c.harina : 'Weizenmehl Type 550')}</select>
+    <div class="hint" id="hkh"></div></div>
   <div class="fl"><div class="fg" style="width:110px"><label>Hidratación %</label>
     <input id="kw" type="number" inputmode="numeric" class="mono" value="${c ? c.hidratacion : 100}"></div>
     <div class="fg" style="width:110px"><label>Ratio</label>
@@ -1009,9 +1044,18 @@ function formCultivo(id) {
     <button class="btn" style="flex:1;background:var(--mm);color:#04182B" data-save="cultivo" data-id="${id || 0}">Guardar</button>
     ${c ? `<button class="btn btn-d" data-del="cultivo" data-id="${id}">Eliminar</button>` : ''}</div>`);
 }
+function pintaHint(sel, dest) {
+  const el = $(sel), box = $(dest);
+  if (!el || !box) return;
+  const i = harinaInfo(el.value);
+  box.innerHTML = `<span class="chip" style="background:var(--sur2);color:${COLR[i.r]};padding:2px 7px">${LBLR[i.r]}</span> ${esc(i.h)}`;
+}
+
 async function saveCultivo(id) {
   const nombre = val('kn') || 'Masa madre';
-  const o = { nombre, harina: val('kh') || 'Trigo', hidratacion: parseInt(val('kw'), 10) || 100,
+  const o = { nombre, harina: val('kh') || 'Weizenmehl Type 550',
+              harina_arranque: val('ka') || 'Roggenvollkornmehl',
+              hidratacion: parseInt(val('kw'), 10) || 100,
               ratio: val('kr') || '1:1:1', inicio: val('ki') || hoy(),
               velocidad: window._vel || 1, plan_dias: window._dur || 10 };
   try {
@@ -1255,6 +1299,8 @@ document.addEventListener('click', async ev => {
 document.addEventListener('change', ev => {
   if (ev.target.id === 'fc') subOpts('fc', 'fs');
   if (ev.target.id === 'xc') subOpts('xc', 'xs');
+  if (ev.target.id === 'ka') pintaHint('ka', 'hka');
+  if (ev.target.id === 'kh') pintaHint('kh', 'hkh');
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') close(); });
 $('bg').onclick = () => {
