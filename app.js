@@ -1,0 +1,930 @@
+import * as api from './db.js';
+
+/* ══ helpers ══ */
+const $ = id => document.getElementById(id);
+const eur = n => '€' + (+n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const iso = d => new Date(d).toISOString().slice(0, 10);
+const hoy = () => iso(new Date());
+const dias = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 864e5);
+const suma = (a, k = 'monto') => a.reduce((x, y) => x + (+y[k] || 0), 0);
+const val = id => { const e = $(id); return e ? e.value.trim() : ''; };
+const dstr = f => {
+  const d = iso(f), n = dias(d, hoy());
+  return n === 0 ? 'hoy' : n === 1 ? 'ayer'
+    : new Date(d + 'T12:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: n > 300 ? 'numeric' : undefined });
+};
+
+const IC = {
+  home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/>',
+  wallet: '<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><circle cx="16.5" cy="14" r="1.2" fill="currentColor" stroke="none"/>',
+  coffee: '<path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 9.5h1.8a2.2 2.2 0 0 1 0 4.4H17"/><path d="M7.5 4.5v1.6M11 4v2M14.5 4.5v1.6"/>',
+  bike: '<circle cx="6" cy="17" r="3.4"/><circle cx="18" cy="17" r="3.4"/><path d="M6 17l4-8h4l4 8M9.5 9h4.5M14 9l2.5 4"/>',
+  bulb: '<path d="M9.2 17.5h5.6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6h5.4c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3z"/>',
+  play: '<path d="M8 5.5 18 12 8 18.5z"/>',
+  flask: '<path d="M10 3v6.2L4.6 18a2 2 0 0 0 1.7 3h11.4a2 2 0 0 0 1.7-3L14 9.2V3"/><path d="M8.5 3h7M7.4 14h9.2"/>',
+  box: '<path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/>',
+  wash: '<rect x="4" y="3" width="16" height="18" rx="2.5"/><circle cx="12" cy="14" r="4"/><path d="M7.5 6.5h.01M11 6.5h.01"/>',
+  tool: '<path d="M14.5 5.5a4.5 4.5 0 0 0 5.9 5.9L21 12l-9 9-3-3 9-9z"/><path d="M8 8 4 4M3 9l6-6"/>'
+};
+const sv = (n, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w || 1.7}" stroke-linecap="round" stroke-linejoin="round">${IC[n] || IC.box}</svg>`;
+const ICONOS = ['coffee', 'bike', 'wash', 'tool', 'box'];
+
+const CATS = {
+  'Comida': ['Supermercado', 'Restaurante', 'Delivery', 'Café/Bar'],
+  'Transporte': ['Metro/Bus', 'Taxi', 'Gasolina', 'Tren', 'Vuelos'],
+  'Hogar': ['Alquiler', 'Servicios', 'Internet', 'Muebles', 'Ferretería', 'Limpieza'],
+  'Salud': ['Farmacia', 'Médico', 'Gimnasio', 'Seguro'],
+  'Educación': ['Universidad', 'Libros', 'Cursos', 'Idiomas'],
+  'Ocio': ['Cine', 'Videojuegos', 'Streaming', 'Deporte', 'Hobbies'],
+  'Tecnología': ['Dispositivos', 'Componentes', 'Suscripciones'],
+  'Otros': ['Otro']
+};
+const CATC = {
+  'Comida': '#52B788', 'Transporte': '#4A9FD8', 'Hogar': '#F4A261', 'Salud': '#E76F8F',
+  'Educación': '#8B7DDB', 'Ocio': '#E9C46A', 'Tecnología': '#6BC5C5', 'Otros': '#7A7872'
+};
+const colCat = c => CATC[c] || '#7A7872';
+const EST = { idea: ['Idea', '#8B7DDB'], curso: ['En curso', '#F4A261'], hecho: ['Hecho', '#52B788'], desc: ['Descartado', '#63615B'] };
+const MODS = [
+  { id: 'cashito', nm: 'Cashito', ic: 'wallet', ac: '--cash', bg: '--cash-bg' },
+  { id: 'taskito', nm: 'Taskito', ic: 'coffee', ac: '--task', bg: '--task-bg' },
+  { id: 'plansito', nm: 'Plansito', ic: 'bulb', ac: '--plan', bg: '--plan-bg' }
+];
+const ACC = { home: '--task', cashito: '--cash', taskito: '--task', aparato: '--task', plansito: '--plan' };
+
+/* ══ estado ══ */
+let D = null;
+let view = 'home', arg = null, tab = 'hoy', filt = 'todos', cat = null, per = 'month';
+let undoFn = null, tmr = null, ch1 = null, ch2 = null, silencio = false;
+
+/* ══ derivados ══ */
+const catOf = g => g.categoria;
+const fechaOf = g => iso(g.fecha);
+
+function rango() {
+  const e = new Date(), y = e.getFullYear(), m = e.getMonth();
+  if (per === 'week') { const s = new Date(e); s.setDate(e.getDate() - ((e.getDay() + 6) % 7)); return [iso(s), iso(e)]; }
+  if (per === 'month') return [iso(new Date(y, m, 1)), iso(e)];
+  if (per === 'last_month') return [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 0))];
+  if (per === 'year') return [iso(new Date(y, 0, 1)), iso(e)];
+  return [iso(new Date(y, m, 1)), iso(e)];
+}
+const enPer = () => { const [a, b] = rango(); return D.gastos.filter(g => { const f = fechaOf(g); return f >= a && f <= b; }); };
+const fijosOn = () => D.fijos.filter(f => f.activo);
+const totIng = () => suma(D.ingresos);
+const balance = () => totIng() - suma(D.gastos);
+const presupuesto = () => {
+  const n = new Date(), p = D.presupuestos.find(x => x.year === n.getFullYear() && x.mes === n.getMonth() + 1);
+  return p ? +p.monto : 0;
+};
+function proxima(t) {
+  if (t.bajo_demanda || !t.freq_dias) return null;
+  const base = t.ultima ? iso(t.ultima) : null;
+  if (base) { const d = new Date(base + 'T12:00'); d.setDate(d.getDate() + t.freq_dias); return iso(d); }
+  const anc = D.aparatos.find(a => a.id === t.aparato_id).fecha_ancla;
+  const d = new Date(anc + 'T12:00');
+  while (iso(d) < hoy()) d.setDate(d.getDate() + t.freq_dias);
+  return iso(d);
+}
+const restan = t => { const p = proxima(t); return p == null ? null : dias(hoy(), p); };
+const progTareas = a => a.tareas.filter(t => !t.bajo_demanda);
+const vencidasDe = a => progTareas(a).filter(t => restan(t) < 0).length;
+const vencidas = () => D.aparatos.reduce((n, a) => n + vencidasDe(a), 0);
+
+/* ══ chrome ══ */
+function drawer() {
+  const cur = view === 'aparato' ? 'taskito' : view;
+  let h = `<button class="nav ${cur === 'home' ? 'sel' : ''}" data-go="home">
+    <div class="ic" style="background:var(--sur2);color:var(--tx2)">${sv('home')}</div><div class="lb">Inicio</div></button>`;
+  MODS.forEach(m => {
+    let mt = '';
+    if (m.id === 'cashito') mt = `<span class="mono">${eur(balance())}</span>`;
+    if (m.id === 'taskito') mt = vencidas() ? `<span class="chip" style="background:var(--task-bg);color:var(--task)">${vencidas()}</span>` : 'al día';
+    if (m.id === 'plansito') mt = D.planes.filter(p => p.estado === 'curso').length + ' en curso';
+    h += `<button class="nav ${cur === m.id ? 'sel' : ''}" data-go="${m.id}">
+      <div class="ic" style="background:var(${m.bg});color:var(${m.ac})">${sv(m.ic)}</div>
+      <div class="lb">${m.nm}</div><div class="mt">${mt}</div></button>`;
+  });
+  h += `<button class="nav" data-act="salir"><div class="ic" style="background:var(--sur2);color:var(--tx3)">${sv('box')}</div>
+    <div class="lb" style="color:var(--tx3)">Cerrar sesión</div></button>`;
+  $('dwin').innerHTML = h;
+}
+function crumb() {
+  const p = [`<button data-go="home">gansito</button>`];
+  if (view !== 'home') {
+    const id = view === 'aparato' ? 'taskito' : view;
+    p.push('<span>/</span>', view === 'aparato'
+      ? `<button data-go="taskito">${id}</button>`
+      : `<span style="color:var(${ACC[view]})">${id}</span>`);
+  }
+  if (view === 'aparato') {
+    const a = ap();
+    if (a) p.push('<span>/</span>', `<span style="color:var(--task)">${esc(a.nombre.toLowerCase())}</span>`);
+  }
+  $('cr').innerHTML = p.join('');
+}
+function go(v, a) {
+  view = v; arg = a || null;
+  if (v === 'cashito') tab = 'hoy';
+  filt = 'todos'; cat = null; cerrarDw(); close(); render(); window.scrollTo(0, 0);
+}
+function cerrarDw() {
+  $('dw').classList.remove('open');
+  $('bg').classList.remove('on'); $('bg').setAttribute('aria-expanded', 'false');
+}
+function toast(m, fn, err) {
+  const t = $('ts');
+  $('tstx').textContent = m;
+  undoFn = fn || null;
+  $('tsun').style.display = fn ? '' : 'none';
+  t.classList.toggle('err', !!err);
+  t.classList.add('show');
+  clearTimeout(tmr); tmr = setTimeout(() => t.classList.remove('show'), fn ? 5000 : 3200);
+}
+const fallo = e => { console.error(e); toast(e.message || 'Algo falló', null, true); };
+function sheet(title, body) {
+  $('mo').innerHTML = `<div class="ov"><div class="sheet">
+    <div class="sh-h"><b>${title}</b><button data-act="cerrar" aria-label="Cerrar">×</button></div>${body}</div></div>`;
+}
+const close = () => { $('mo').innerHTML = ''; };
+
+/* ══ vistas ══ */
+function vHome() {
+  const gp = enPer(), sp = suma(gp), bud = presupuesto();
+  const pct = bud ? Math.min(100, Math.round(sp / bud * 100)) : 0;
+  const fx = suma(fijosOn()), v = vencidas();
+  return `<div class="view">
+  <div class="proj">
+    <div class="ptop"><div class="pic" style="background:var(--cash-bg);color:var(--cash)">${sv('wallet')}</div>
+      <div class="grow"><div class="pnm">Cashito</div><div class="psb">Gastos e ingresos</div></div>
+      <div class="amt" style="color:var(--cash)">${eur(balance())}</div></div>
+    <div class="pbody">
+      <div class="mini">
+        <div><div class="k">Gastado</div><div class="v">${eur(sp)}</div></div>
+        <div><div class="k">Budget</div><div class="v">${bud ? eur(bud) : '—'}</div></div>
+        <div><div class="k">Fijos</div><div class="v">${eur(fx)}</div></div></div>
+      <div class="track"><i style="width:${pct}%;background:${pct > 85 ? 'var(--dng)' : 'var(--cash)'}"></i></div>
+      <div class="fl" style="margin-top:11px">
+        <button class="btn" style="flex:1;background:var(--cash);color:#04241A" data-go="cashito">Abrir Cashito</button>
+        <button class="btn btn-q" data-act="gasto-nuevo-home">+ Gasto</button></div></div></div>
+
+  <button class="proj" data-go="taskito"><div class="ptop">
+    <div class="pic" style="background:var(--task-bg);color:var(--task)">${sv('coffee')}</div>
+    <div class="grow"><div class="pnm">Taskito</div><div class="psb">${D.aparatos.length} aparatos</div></div>
+    ${v ? `<span class="chip" style="background:var(--task-bg);color:var(--task)">${v} vencida${v > 1 ? 's' : ''}</span>`
+      : `<span class="chip" style="color:var(--tx3)">al día</span>`}</div></button>
+
+  <button class="proj" data-go="plansito"><div class="ptop">
+    <div class="pic" style="background:var(--plan-bg);color:var(--plan)">${sv('bulb')}</div>
+    <div class="grow"><div class="pnm">Plansito</div><div class="psb">${D.planes.length} planes</div></div>
+    <span class="chip" style="color:var(--tx3)">${D.planes.filter(p => p.estado === 'curso').length} en curso</span>
+    </div></button></div>`;
+}
+
+/* ── cashito ── */
+const TABS = [['hoy', 'Hoy'], ['analisis', 'Análisis'], ['ajustes', 'Ajustes']];
+const PERS = [['week', 'Semana'], ['month', 'Mes'], ['last_month', 'Anterior'], ['year', 'Año']];
+
+const vCashito = () => `<div class="view">
+  <div class="hrow"><div class="h1">Cashito</div><span class="sub mono">${eur(balance())}</span></div>
+  <div class="ptabs">${TABS.map(([k, l]) => `<button class="ptab ${tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
+  ${tab === 'hoy' ? tHoy() : tab === 'analisis' ? tAnal() : tAjus()}</div>`;
+
+function frecuentes() {
+  const lim = new Date(); lim.setDate(lim.getDate() - 30);
+  const c = {};
+  D.gastos.filter(g => g.item_nombre && fechaOf(g) >= iso(lim)).forEach(g => c[g.item_nombre] = (c[g.item_nombre] || 0) + 1);
+  return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 7).map(x => x[0]);
+}
+function rowGasto(g) {
+  return `<div class="row tap" data-gasto="${g.id}">
+    <span style="width:5px;height:5px;border-radius:50%;background:${colCat(g.categoria)};flex:none"></span>
+    <div class="grow"><div class="t1">${esc(g.item_nombre || g.subcategoria)}</div>
+      <div class="t2">${esc(g.subcategoria)} · ${dstr(g.fecha)}${g.item_tipo ? ' · ' + (g.item_tipo === 'basico' ? 'básico' : 'gusto') : ''}${g.nota ? ' · ' + esc(g.nota) : ''}</div></div>
+    <div class="amt">${eur(g.monto)}</div></div>`;
+}
+function tHoy() {
+  const gp = enPer(), sp = suma(gp), bud = presupuesto();
+  const pct = bud ? Math.min(100, Math.round(sp / bud * 100)) : 0;
+  const rest = bud - sp, n = new Date();
+  const quedan = Math.max(1, new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate() - n.getDate());
+  const rec = D.gastos.slice(0, 12);
+  const fr = frecuentes();
+  return `<div class="kpis">
+    <div class="kpi"><div class="k">Gastado este mes</div><div class="v">${eur(sp)}</div>
+      <div class="s">${bud ? pct + '% de ' + eur(bud) : 'sin presupuesto'}</div>
+      <div class="track" style="margin-top:6px"><i style="width:${pct}%;background:${pct > 85 ? 'var(--dng)' : 'var(--cash)'}"></i></div></div>
+    <div class="kpi"><div class="k">Disponible</div>
+      <div class="v" style="color:${rest < 0 ? 'var(--dng)' : 'var(--cash)'}">${bud ? eur(rest) : '—'}</div>
+      <div class="s">${bud ? eur(rest / quedan) + '/día · ' + quedan + ' días' : 'defínelo en Ajustes'}</div></div></div>
+
+  <div class="lbl">Frecuentes</div>
+  <div class="frec mb">${fr.map(i => `<button data-frec="${esc(i)}">${esc(i)}</button>`).join('')}
+    <button style="border-color:var(--cash);color:var(--cash)" data-act="gasto-nuevo">+ Otro</button></div>
+
+  <div class="lbl" style="margin-top:12px">Movimientos</div>
+  <div class="card">${rec.length ? rec.map(rowGasto).join('') : '<div class="empty">Sin gastos todavía.</div>'}</div>
+  <div style="text-align:center;margin-top:10px"><button class="btn btn-q" data-tab="analisis">Ver todo el análisis</button></div>`;
+}
+function tAnal() {
+  const gp = enPer(), gs = cat ? gp.filter(g => g.categoria === cat) : gp;
+  const tot = {}; gp.forEach(g => tot[g.categoria] = (tot[g.categoria] || 0) + +g.monto);
+  const cats = Object.entries(tot).sort((a, b) => b[1] - a[1]);
+  const sup = gp.filter(g => g.subcategoria === 'Supermercado');
+  const nec = suma(sup.filter(g => g.item_tipo === 'basico')), gus = suma(sup.filter(g => g.item_tipo === 'gusto'));
+  const [a, b] = rango(), nd = Math.max(1, dias(a, b) + 1);
+  return `<div class="tabs">${PERS.map(([k, l]) => `<button class="tab ${per === k ? 'on' : ''}" data-per="${k}">${l}</button>`).join('')}</div>
+  <div class="kpis">
+    <div class="kpi"><div class="k">Total período</div><div class="v">${eur(suma(gp))}</div><div class="s">${gp.length} movimientos</div></div>
+    <div class="kpi"><div class="k">Media diaria</div><div class="v">${eur(suma(gp) / nd)}</div>
+      <div class="s">${dstr(a)} → ${dstr(b)}</div></div></div>
+
+  <div class="rib">${cats.map(([k, v]) => `<button class="fcat ${cat === k ? 'on' : ''}" data-cat="${esc(k)}">
+    <span style="width:6px;height:6px;border-radius:50%;background:${colCat(k)}"></span>${esc(k)}<b>${eur(v)}</b></button>`).join('')}</div>
+
+  ${cat === 'Comida' && sup.length ? `<div class="lbl">Supermercado · básico vs gusto</div>
+  <div class="card mb" style="padding:12px 13px">
+    <div class="fl" style="justify-content:space-between;margin-bottom:7px">
+      <span class="t1">Básico <span class="mono" style="color:var(--cash)">${eur(nec)}</span></span>
+      <span class="t1">Gusto <span class="mono" style="color:var(--task)">${eur(gus)}</span></span></div>
+    <div class="track"><i style="width:${nec + gus ? nec / (nec + gus) * 100 : 0}%;background:var(--cash)"></i></div>
+    <div class="t2" style="margin-top:7px">${sup.length} compras de supermercado en el período</div></div>` : ''}
+
+  <div class="card mb" style="padding:12px">
+    <div class="donut"><canvas id="dnt"></canvas>
+      <div class="dc"><div><div class="a">${eur(suma(gs))}</div><div class="b">${esc(cat || 'total')}</div></div></div></div></div>
+
+  <div class="card mb" style="padding:12px"><div class="lbl">Gasto diario</div><div class="lineb"><canvas id="lin"></canvas></div></div>
+
+  <div class="lbl">Movimientos${cat ? ' · ' + esc(cat) : ''}</div>
+  <div class="card">${gs.length ? gs.map(rowGasto).join('') : '<div class="empty">Nada en este período.</div>'}</div>
+  <div style="text-align:center;margin-top:10px"><button class="btn btn-q" data-act="csv">Exportar CSV</button></div>`;
+}
+function tAjus() {
+  const n = new Date(), bud = presupuesto(), diaHoy = n.getDate();
+  const porCobrar = fijosOn().filter(f => f.dia_cobro >= diaHoy);
+  return `<div class="lbl">Presupuesto mensual</div>
+  <div class="card mb"><div class="row">
+    <div class="grow"><div class="t1">${n.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</div>
+      <div class="t2">Se aplica al mes en curso</div></div>
+    <div class="amt">${bud ? eur(bud) : '—'}</div>
+    <button class="btn btn-q" data-act="budget">Cambiar</button></div></div>
+
+  <div class="lbl">Ingresos · ${eur(totIng())}</div>
+  <div class="card mb">${D.ingresos.map(i => `<div class="row">
+    <div class="grow"><div class="t1">${esc(i.descripcion || 'Ingreso')}</div><div class="t2">${dstr(i.fecha)}</div></div>
+    <div class="amt" style="color:var(--cash)">+${eur(i.monto)}</div>
+    <button class="btn btn-q" data-ing="${i.id}">Editar</button></div>`).join('')}
+    <div class="row"><button class="btn btn-q" style="width:100%" data-act="ing-nuevo">+ Registrar ingreso</button></div></div>
+
+  <div class="lbl">Gastos fijos · ${eur(suma(fijosOn()))} al mes</div>
+  <div class="card mb">${D.fijos.map(f => `<div class="row">
+    <div class="sw ${f.activo ? 'on' : ''}" data-toggle="${f.id}" role="switch" aria-checked="${f.activo}"><i></i></div>
+    <div class="grow" style="${f.activo ? '' : 'opacity:.45'}"><div class="t1">${esc(f.nombre)}</div>
+      <div class="t2">${esc(f.categoria)} → ${esc(f.subcategoria)} · día ${f.dia_cobro}</div></div>
+    <div class="amt" style="${f.activo ? '' : 'opacity:.45'}">${eur(f.monto)}</div>
+    <button class="btn btn-q" data-fijo="${f.id}">Editar</button></div>`).join('')}
+    <div class="row"><button class="btn btn-q" style="width:100%" data-act="fijo-nuevo">+ Nuevo fijo</button></div></div>
+
+  <div class="lbl">Fijos por cobrar este mes</div>
+  <div class="card mb">${porCobrar.length ? porCobrar.map(f => `<div class="row">
+    <div class="grow"><div class="t1">${esc(f.nombre)}</div><div class="t2">día ${f.dia_cobro}</div></div>
+    <div class="amt">${eur(f.monto)}</div>
+    <button class="btn" style="background:var(--cash);color:#04241A" data-pagar="${f.id}">Pagado</button></div>`).join('')
+      : '<div class="empty">Todos cobrados este mes.</div>'}</div>
+
+  <div class="lbl">Ítems · ${D.items.length}</div>
+  <div class="card" style="padding:11px 13px"><div class="frec">
+    ${D.items.map(i => `<button data-hist="${esc(i.nombre)}">${esc(i.nombre)}</button>`).join('')}</div></div>`;
+}
+
+/* ── formularios cashito ── */
+function formGasto(id, pre) {
+  const g = id ? D.gastos.find(x => x.id === id) : null;
+  const c0 = g ? g.categoria : 'Comida';
+  sheet(g ? 'Editar gasto' : 'Nuevo gasto', `
+  <div class="fl"><div class="fg" style="width:120px"><label>Importe</label>
+    <input id="fm" type="number" step="0.01" inputmode="decimal" class="mono" placeholder="0.00" value="${g ? g.monto : ''}"></div>
+    <div class="fg grow"><label>Fecha</label><input id="ff" type="date" value="${g ? fechaOf(g) : hoy()}"></div></div>
+  <div class="fl"><div class="fg grow"><label>Categoría</label>
+    <select id="fc">${Object.keys(CATS).map(k => `<option ${k === c0 ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
+    <div class="fg grow"><label>Subcategoría</label><select id="fs"></select></div></div>
+  <div class="fg"><label>Producto</label>
+    <input id="fi" list="dl" placeholder="Café en grano…" value="${g ? esc(g.item_nombre || '') : (pre ? esc(pre) : '')}">
+    <datalist id="dl">${D.items.map(i => `<option value="${esc(i.nombre)}">`).join('')}</datalist></div>
+  <div class="fg"><label>Nota</label><input id="fn" placeholder="opcional" value="${g ? esc(g.nota || '') : ''}"></div>
+  <div class="fg"><label>Tipo</label><div class="seg" id="segTipo">
+    <button data-tipo="basico" class="${g && g.item_tipo === 'basico' ? 'on' : ''}">Básico</button>
+    <button data-tipo="gusto" class="${g && g.item_tipo === 'gusto' ? 'on' : ''}">Gusto</button>
+    <button data-tipo="" class="${!g || !g.item_tipo ? 'on' : ''}">N/A</button></div></div>
+  <div class="fl" style="margin-top:12px">
+    <button class="btn" style="flex:1;background:var(--cash);color:#04241A" data-save="gasto" data-id="${id || 0}">${g ? 'Guardar' : 'Registrar'}</button>
+    ${g ? `<button class="btn btn-d" data-del="gasto" data-id="${id}">Eliminar</button>` : ''}</div>`);
+  subOpts('fc', 'fs', g ? g.subcategoria : (pre ? 'Supermercado' : null));
+  window._tipo = g ? (g.item_tipo || '') : '';
+  setTimeout(() => $('fm').focus(), 60);
+}
+function subOpts(cid, sid, sel) {
+  const c = $(cid).value, s = $(sid);
+  s.innerHTML = (CATS[c] || ['Otro']).map(k => `<option ${k === sel ? 'selected' : ''}>${k}</option>`).join('');
+}
+async function saveGasto(id) {
+  const m = parseFloat(val('fm'));
+  if (!m || m <= 0) return $('fm').focus();
+  const nombre = val('fi') || null;
+  const item = nombre ? D.items.find(i => i.nombre.toLowerCase() === nombre.toLowerCase()) : null;
+  const g = {
+    categoria: val('fc'), subcategoria: val('fs'), monto: m,
+    nota: val('fn') || null, fecha: new Date(val('ff') + 'T12:00:00').toISOString(),
+    item_nombre: nombre, item_tipo: window._tipo || null,
+    item_id: item ? item.id : null
+  };
+  try {
+    if (nombre && !item) { const nuevo = await api.addItem(nombre); g.item_id = nuevo.id; D.items.push(nuevo); }
+    if (id) {
+      const prev = { ...D.gastos.find(x => x.id === id) };
+      const upd = await api.editGasto(id, g);
+      Object.assign(D.gastos.find(x => x.id === id), upd);
+      toast('Gasto actualizado', async () => {
+        await api.editGasto(id, prev); Object.assign(D.gastos.find(x => x.id === id), prev);
+      });
+    } else {
+      const nuevo = await api.addGasto(g);
+      D.gastos.unshift(nuevo); ordenarGastos();
+      toast('Gasto registrado', async () => {
+        await api.delGasto(nuevo.id); D.gastos = D.gastos.filter(x => x.id !== nuevo.id);
+      });
+    }
+    close(); render();
+  } catch (e) { fallo(e); }
+}
+const ordenarGastos = () => D.gastos.sort((a, b) => a.fecha < b.fecha ? 1 : -1);
+
+async function borrarGasto(id) {
+  const g = D.gastos.find(x => x.id === id);
+  try {
+    await api.delGasto(id);
+    D.gastos = D.gastos.filter(x => x.id !== id);
+    toast('Gasto eliminado', async () => {
+      const { id: _, user_id: __, ...campos } = g;
+      const nuevo = await api.addGasto(campos); D.gastos.push(nuevo); ordenarGastos();
+    });
+    close(); render();
+  } catch (e) { fallo(e); }
+}
+
+function formIngreso(id) {
+  const i = id ? D.ingresos.find(x => x.id === id) : null;
+  sheet(i ? 'Editar ingreso' : 'Registrar ingreso', `
+  <div class="fl"><div class="fg" style="width:130px"><label>Importe</label>
+    <input id="im" type="number" step="0.01" inputmode="decimal" class="mono" value="${i ? i.monto : ''}"></div>
+    <div class="fg grow"><label>Fecha</label><input id="if" type="date" value="${i ? fechaOf(i) : hoy()}"></div></div>
+  <div class="fg"><label>Descripción</label><input id="idd" placeholder="Beca, sueldo…" value="${i ? esc(i.descripcion || '') : ''}"></div>
+  <div class="fl" style="margin-top:12px">
+    <button class="btn" style="flex:1;background:var(--cash);color:#04241A" data-save="ingreso" data-id="${id || 0}">Guardar</button>
+    ${i ? `<button class="btn btn-d" data-del="ingreso" data-id="${id}">Eliminar</button>` : ''}</div>`);
+}
+async function saveIngreso(id) {
+  const m = parseFloat(val('im'));
+  if (!m || m <= 0) return $('im').focus();
+  const o = { monto: m, descripcion: val('idd') || null, fecha: new Date(val('if') + 'T12:00:00').toISOString() };
+  try {
+    if (id) { const upd = await api.editIngreso(id, o); Object.assign(D.ingresos.find(x => x.id === id), upd); toast('Ingreso actualizado'); }
+    else {
+      const nuevo = await api.addIngreso(o); D.ingresos.unshift(nuevo);
+      toast('Ingreso registrado', async () => { await api.delIngreso(nuevo.id); D.ingresos = D.ingresos.filter(x => x.id !== nuevo.id); });
+    }
+    close(); render();
+  } catch (e) { fallo(e); }
+}
+async function borrarIngreso(id) {
+  try { await api.delIngreso(id); D.ingresos = D.ingresos.filter(x => x.id !== id); toast('Ingreso eliminado'); close(); render(); }
+  catch (e) { fallo(e); }
+}
+
+function formBudget() {
+  const n = new Date();
+  sheet('Presupuesto mensual', `
+  <div class="fg"><label>Importe para ${n.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</label>
+    <input id="bm" type="number" step="10" inputmode="decimal" class="mono" value="${presupuesto() || ''}"></div>
+  <button class="btn" style="width:100%;background:var(--cash);color:#04241A;margin-top:8px" data-save="budget">Guardar</button>`);
+}
+async function saveBudget() {
+  const m = parseFloat(val('bm'));
+  if (!m || m <= 0) return;
+  const n = new Date();
+  try {
+    const p = await api.setPresupuesto(n.getFullYear(), n.getMonth() + 1, m);
+    const i = D.presupuestos.findIndex(x => x.id === p.id);
+    i >= 0 ? D.presupuestos[i] = p : D.presupuestos.push(p);
+    toast('Presupuesto actualizado'); close(); render();
+  } catch (e) { fallo(e); }
+}
+
+function formFijo(id) {
+  const f = id ? D.fijos.find(x => x.id === id) : null;
+  sheet(f ? 'Editar fijo' : 'Nuevo gasto fijo', `
+  <div class="fg"><label>Nombre</label><input id="xn" placeholder="Alquiler" value="${f ? esc(f.nombre) : ''}"></div>
+  <div class="fl"><div class="fg" style="width:120px"><label>Importe</label>
+    <input id="xm" type="number" step="0.01" inputmode="decimal" class="mono" value="${f ? f.monto : ''}"></div>
+    <div class="fg" style="width:120px"><label>Día de cobro</label>
+    <input id="xd" type="number" min="1" max="31" inputmode="numeric" class="mono" value="${f ? f.dia_cobro : 1}"></div></div>
+  <div class="fl"><div class="fg grow"><label>Categoría</label>
+    <select id="xc">${Object.keys(CATS).map(k => `<option ${f && k === f.categoria ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
+    <div class="fg grow"><label>Subcategoría</label><select id="xs"></select></div></div>
+  <div class="fl" style="margin-top:12px">
+    <button class="btn" style="flex:1;background:var(--cash);color:#04241A" data-save="fijo" data-id="${id || 0}">Guardar</button>
+    ${f ? `<button class="btn btn-d" data-del="fijo" data-id="${id}">Eliminar</button>` : ''}</div>`);
+  subOpts('xc', 'xs', f ? f.subcategoria : null);
+}
+async function saveFijo(id) {
+  const m = parseFloat(val('xm')), nombre = val('xn'), d = parseInt(val('xd'), 10);
+  if (!nombre || !m || m <= 0 || !d) return;
+  const o = { nombre, monto: m, dia_cobro: Math.min(31, Math.max(1, d)), categoria: val('xc'), subcategoria: val('xs') };
+  try {
+    if (id) { const u = await api.editFijo(id, o); Object.assign(D.fijos.find(x => x.id === id), u); toast('Fijo actualizado'); }
+    else { const nuevo = await api.addFijo({ ...o, activo: true }); D.fijos.push(nuevo); toast('Fijo creado'); }
+    close(); render();
+  } catch (e) { fallo(e); }
+}
+async function borrarFijo(id) {
+  try { await api.delFijo(id); D.fijos = D.fijos.filter(x => x.id !== id); toast('Fijo eliminado'); close(); render(); }
+  catch (e) { fallo(e); }
+}
+async function toggleFijo(id) {
+  const f = D.fijos.find(x => x.id === id);
+  try { const u = await api.editFijo(id, { activo: !f.activo }); Object.assign(f, u);
+    toast(f.nombre + (f.activo ? ' activado' : ' desactivado')); render(); }
+  catch (e) { fallo(e); }
+}
+async function pagarFijo(id) {
+  const f = D.fijos.find(x => x.id === id);
+  try {
+    const nuevo = await api.addGasto({
+      categoria: f.categoria, subcategoria: f.subcategoria, monto: f.monto,
+      item_nombre: f.nombre, fecha: new Date().toISOString(), nota: 'Gasto fijo'
+    });
+    D.gastos.unshift(nuevo); ordenarGastos();
+    toast(f.nombre + ' registrado', async () => { await api.delGasto(nuevo.id); D.gastos = D.gastos.filter(x => x.id !== nuevo.id); });
+    render();
+  } catch (e) { fallo(e); }
+}
+function histItem(nombre) {
+  const h = D.gastos.filter(g => g.item_nombre === nombre);
+  const t = suma(h), avg = h.length ? t / h.length : 0;
+  sheet(esc(nombre), `<div class="kpis" style="margin-bottom:10px">
+    <div class="kpi"><div class="k">Total</div><div class="v">${eur(t)}</div><div class="s">${h.length} compras</div></div>
+    <div class="kpi"><div class="k">Media</div><div class="v">${eur(avg)}</div><div class="s">por compra</div></div></div>
+    <div class="card">${h.length ? h.map(g => `<div class="row"><div class="grow"><div class="t1">${dstr(g.fecha)}</div>
+      <div class="t2">${esc(g.subcategoria)}${g.item_tipo ? ' · ' + (g.item_tipo === 'basico' ? 'básico' : 'gusto') : ''}</div></div>
+      <div class="amt">${eur(g.monto)}</div></div>`).join('') : '<div class="empty">Sin compras registradas.</div>'}</div>`);
+}
+function csv() {
+  const gp = enPer();
+  const l = [['Fecha', 'Categoría', 'Subcategoría', 'Producto', 'Importe', 'Tipo', 'Nota'].join(',')];
+  const q = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+  gp.forEach(g => l.push([fechaOf(g), q(g.categoria), q(g.subcategoria), q(g.item_nombre), (+g.monto).toFixed(2), g.item_tipo || '', q(g.nota)].join(',')));
+  const b = new Blob(['\ufeff' + l.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const u = URL.createObjectURL(b), a = document.createElement('a');
+  a.href = u; a.download = `cashito_${per}_${hoy()}.csv`; a.click(); URL.revokeObjectURL(u);
+  toast(gp.length + ' movimientos exportados');
+}
+
+/* ── charts ── */
+const tt = () => ({
+  backgroundColor: '#131312', borderColor: '#333330', borderWidth: 1, padding: 9, displayColors: false,
+  titleFont: { family: 'DM Sans', size: 11 }, bodyFont: { family: 'DM Mono', size: 11 },
+  callbacks: { label: x => ' ' + eur(x.parsed.y !== undefined ? x.parsed.y : x.parsed) }
+});
+function donut() {
+  const el = $('dnt'); if (!el || !window.Chart) return;
+  const t = {}; enPer().forEach(g => t[g.categoria] = (t[g.categoria] || 0) + +g.monto);
+  const ks = Object.keys(t); if (ch1) ch1.destroy();
+  ch1 = new Chart(el, {
+    type: 'doughnut',
+    data: { labels: ks, datasets: [{ data: ks.map(k => t[k]),
+      backgroundColor: ks.map(k => cat && cat !== k ? colCat(k) + '2E' : colCat(k)),
+      borderColor: '#000', borderWidth: 2, hoverOffset: 5 }] },
+    options: { cutout: '71%', plugins: { legend: { display: false }, tooltip: tt() },
+      onClick: (e, a) => { if (a.length) { cat = cat === ks[a[0].index] ? null : ks[a[0].index]; render(); } },
+      animation: { duration: 500, easing: 'easeOutQuart' }, maintainAspectRatio: false }
+  });
+}
+function line() {
+  const el = $('lin'); if (!el || !window.Chart) return;
+  const [a, b] = rango(), d = {};
+  for (let x = new Date(a + 'T12:00'); iso(x) <= b; x.setDate(x.getDate() + 1)) d[iso(x)] = 0;
+  enPer().forEach(g => { const f = fechaOf(g); if (d[f] !== undefined) d[f] += +g.monto; });
+  const ks = Object.keys(d); if (ch2) ch2.destroy();
+  ch2 = new Chart(el, {
+    type: 'bar',
+    data: { labels: ks.map(k => k.slice(8)), datasets: [{ data: ks.map(k => d[k]), backgroundColor: '#52B788', borderRadius: 3, barPercentage: .72 }] },
+    options: { plugins: { legend: { display: false }, tooltip: tt() },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#63615B', font: { family: 'DM Mono', size: 9 }, maxRotation: 0, autoSkipPadding: 12 } },
+        y: { grid: { color: '#1C1C19' }, border: { display: false }, ticks: { color: '#63615B', font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 4 } }
+      }, animation: { duration: 480 }, maintainAspectRatio: false }
+  });
+}
+
+/* ── taskito ── */
+const ap = () => D.aparatos.find(a => String(a.id) === String(arg));
+function vTaskito() {
+  return `<div class="view">
+  <div class="hrow"><div class="h1">Taskito</div><span class="sub">${D.aparatos.length} aparatos</span></div>
+  ${D.aparatos.map(a => {
+    const v = vencidasDe(a), pr = progTareas(a).map(restan).filter(x => x != null).sort((x, y) => x - y)[0];
+    return `<button class="proj" data-aparato="${a.id}"><div class="ptop">
+      <div class="pic" style="background:var(--task-bg);color:var(--task)">${sv(a.icono)}</div>
+      <div class="grow"><div class="pnm">${esc(a.nombre)}</div>
+        <div class="psb">${esc(a.modelo || '')} · ${a.tareas.length} tareas</div></div>
+      ${v ? `<span class="chip" style="background:var(--task-bg);color:var(--task)">${v} vencida${v > 1 ? 's' : ''}</span>`
+        : `<span class="chip" style="color:var(--tx3)">${pr != null ? 'en ' + pr + ' d' : 'sin tareas'}</span>`}</div></button>`;
+  }).join('')}
+  <button class="proj" data-act="aparato-nuevo" style="border-style:dashed"><div class="ptop">
+    <div class="pic" style="background:var(--sur2);color:var(--tx3)">${sv('box')}</div>
+    <div class="grow"><div class="pnm" style="color:var(--tx3)">Añadir aparato</div></div></div></button></div>`;
+}
+function vAparato() {
+  const a = ap();
+  if (!a) return '<div class="view"><div class="empty">Aparato no encontrado.</div></div>';
+  const prog = progTareas(a).slice().sort((x, y) => restan(x) - restan(y));
+  const od = a.tareas.filter(t => t.bajo_demanda);
+  const hist = a.log.slice(0, 10);
+  return `<div class="view">
+  <div class="hrow"><div class="h1">${esc(a.nombre)}</div><span class="sub">${esc(a.modelo || '')}</span></div>
+
+  <div class="lbl">Cronograma</div>
+  <div class="card mb">${prog.length ? prog.map(t => {
+    const r = restan(t), late = r < 0;
+    const w = late ? `Vencida hace ${-r} día${r < -1 ? 's' : ''}` : (r === 0 ? 'Hoy' : `En ${r} días`);
+    return `<div class="row"><div class="grow tap" data-tarea="${t.id}">
+      <div class="t1">${esc(t.nombre)}</div>
+      <div class="t2" style="${late ? 'color:var(--task)' : ''}">${w} · cada ${t.freq_dias} d${t.producto ? ' · ' + esc(t.producto) : ''}</div></div>
+      ${t.videos.length ? `<button class="btn btn-q" style="padding:6px 8px;line-height:0" aria-label="Video" data-tarea="${t.id}">
+        <span style="display:block;width:13px;height:13px">${sv('play', 1.9)}</span></button>` : ''}
+      <button class="btn ${late ? '' : 'btn-q'}" ${late ? 'style="background:var(--task);color:#2A1505"' : ''} data-hecho="${t.id}">Hecho</button></div>`;
+  }).join('') : '<div class="empty">Sin tareas. Añade una abajo.</div>'}</div>
+
+  ${od.length ? `<div class="lbl">Bajo demanda</div>
+  <div class="card mb">${od.map(t => `<div class="row">
+    <div class="pic" style="background:var(--task-bg);color:var(--task);width:28px;height:28px">${sv('flask')}</div>
+    <div class="grow tap" data-tarea="${t.id}"><div class="t1">${esc(t.nombre)}</div>
+      <div class="t2">${t.ultima ? 'Última: ' + dstr(t.ultima) : 'Sin registros'}${t.producto ? ' · ' + esc(t.producto) : ''}</div></div>
+    <button class="btn btn-q" data-hecho="${t.id}">Hecho</button></div>`).join('')}</div>` : ''}
+
+  ${a.cons.length ? `<div class="lbl">Consumibles</div>
+  <div class="card mb">${a.cons.map(c => `<div class="row">
+    <div class="grow"><div class="t1">${esc(c.nombre)}</div><div class="t2 mono">${esc(c.codigo)}</div></div>
+    <button class="btn btn-q" style="padding:5px 10px" data-stock="${c.id}" data-d="-1">−</button>
+    <span class="amt" style="min-width:22px;text-align:center;${c.stock <= 1 ? 'color:var(--task)' : ''}">${c.stock}</span>
+    <button class="btn btn-q" style="padding:5px 10px" data-stock="${c.id}" data-d="1">+</button></div>`).join('')}</div>` : ''}
+
+  <div class="lbl">Historial</div>
+  <div class="card mb">${hist.length ? hist.map(l => `<div class="row">
+    <div class="grow"><div class="t1">${esc(l.nombre || '—')}</div><div class="t2">${dstr(l.fecha)}${l.nota ? ' · ' + esc(l.nota) : ''}</div></div></div>`).join('')
+      : '<div class="empty">Sin registros todavía.</div>'}</div>
+
+  <div class="fl"><button class="btn btn-q" style="flex:1" data-act="tarea-nueva">+ Tarea</button>
+    <button class="btn btn-q" data-act="aparato-editar">Editar aparato</button></div></div>`;
+}
+function verTarea(tid) {
+  const a = ap(), t = a.tareas.find(x => x.id === tid);
+  const r = restan(t);
+  sheet(esc(t.nombre), `
+  <div class="fl mb" style="flex-wrap:wrap">
+    ${t.freq_dias ? `<span class="chip" style="background:var(--sur2);color:var(--tx2)">Cada ${t.freq_dias} días</span>` : ''}
+    ${t.producto ? `<span class="chip mono" style="background:var(--task-bg);color:var(--task)">${esc(t.producto)}</span>` : ''}
+    ${r != null ? `<span class="chip" style="color:var(--tx3)">${r < 0 ? 'vencida hace ' + (-r) + ' d' : 'en ' + r + ' d'}</span>` : ''}
+    ${t.ultima ? `<span class="chip" style="color:var(--tx3)">última ${dstr(t.ultima)}</span>` : ''}</div>
+  <div id="vidbox">${t.videos.length ? '<div class="empty">Cargando video…</div>' : ''}</div>
+  <div class="instr">${esc(t.instrucciones || 'Sin instrucciones.')}</div>
+  <div class="fl" style="margin-top:14px">
+    <button class="btn" style="flex:1;background:var(--task);color:#2A1505" data-hecho="${t.id}" data-close="1">Marcar como hecho</button>
+    <button class="btn btn-q" data-tarea-edit="${t.id}">Editar</button></div>`);
+  if (t.videos.length) cargarVideos(t.videos);
+}
+async function cargarVideos(vs) {
+  try {
+    const urls = await Promise.all(vs.map(v => api.urlVideo(v.storage_path)));
+    const box = $('vidbox'); if (!box) return;
+    box.innerHTML = urls.map((u, i) => `<div class="mb"><video controls preload="metadata" src="${u}"></video>
+      <div class="t2" style="margin-top:4px">${esc(vs[i].titulo)}</div></div>`).join('');
+  } catch (e) { const box = $('vidbox'); if (box) box.innerHTML = '<div class="empty">No se pudo cargar el video.</div>'; }
+}
+async function marcarHecho(tid) {
+  const a = ap() || D.aparatos.find(x => x.tareas.some(t => t.id === tid));
+  const t = a.tareas.find(x => x.id === tid);
+  try {
+    const l = await api.addLog(tid, null);
+    t.log.unshift(l); t.ultima = l.fecha;
+    a.log.unshift({ ...l, nombre: t.nombre });
+    let cons = null;
+    if (t.producto) {
+      cons = a.cons.find(c => c.codigo === t.producto);
+      if (cons && cons.stock > 0) { const u = await api.setStock(cons.id, cons.stock - 1); Object.assign(cons, u); }
+      else cons = null;
+    }
+    toast(t.nombre + ' registrada', async () => {
+      await api.delLog(l.id);
+      t.log = t.log.filter(x => x.id !== l.id); t.ultima = t.log.length ? t.log[0].fecha : null;
+      a.log = a.log.filter(x => x.id !== l.id);
+      if (cons) { const u = await api.setStock(cons.id, cons.stock + 1); Object.assign(cons, u); }
+    });
+    render();
+  } catch (e) { fallo(e); }
+}
+async function ajustarStock(cid, d) {
+  const a = ap(), c = a.cons.find(x => x.id === cid);
+  const nuevo = Math.max(0, c.stock + d);
+  if (nuevo === c.stock) return;
+  try { const u = await api.setStock(cid, nuevo); Object.assign(c, u); render(); } catch (e) { fallo(e); }
+}
+function formAparato(id) {
+  const a = id ? D.aparatos.find(x => x.id === id) : null;
+  sheet(a ? 'Editar aparato' : 'Nuevo aparato', `
+  <div class="fg"><label>Nombre</label><input id="an" placeholder="Lavadora" value="${a ? esc(a.nombre) : ''}"></div>
+  <div class="fg"><label>Modelo</label><input id="am" placeholder="Bosch WAN28" value="${a ? esc(a.modelo || '') : ''}"></div>
+  <div class="fg"><label>Icono</label><div class="seg" id="segIco">
+    ${ICONOS.map(i => `<button data-ico="${i}" class="${(a ? a.icono : 'box') === i ? 'on' : ''}" style="line-height:0;padding:9px">
+      <span style="display:block;width:16px;height:16px;margin:0 auto">${sv(i)}</span></button>`).join('')}</div></div>
+  <div class="fg"><label>Fecha ancla</label><input id="af" type="date" value="${a ? a.fecha_ancla : hoy()}">
+    <div class="t2" style="margin-top:4px">Solo se usa para tareas que nunca has marcado como hechas.</div></div>
+  <div class="fl" style="margin-top:12px">
+    <button class="btn" style="flex:1;background:var(--task);color:#2A1505" data-save="aparato" data-id="${id || 0}">Guardar</button>
+    ${a ? `<button class="btn btn-d" data-del="aparato" data-id="${id}">Eliminar</button>` : ''}</div>`);
+  window._ico = a ? a.icono : 'box';
+}
+async function saveAparato(id) {
+  const nombre = val('an'); if (!nombre) return $('an').focus();
+  const o = { nombre, modelo: val('am') || null, icono: window._ico || 'box', fecha_ancla: val('af') };
+  try {
+    if (id) { const u = await api.editAparato(id, o); Object.assign(D.aparatos.find(x => x.id === id), u); toast('Aparato actualizado'); }
+    else {
+      const n = await api.addAparato({ ...o, orden: D.aparatos.length + 1 });
+      D.aparatos.push({ ...n, tareas: [], cons: [], log: [] }); toast('Aparato creado');
+    }
+    close(); render();
+  } catch (e) { fallo(e); }
+}
+async function borrarAparato(id) {
+  try { await api.delAparato(id); D.aparatos = D.aparatos.filter(x => x.id !== id); toast('Aparato eliminado'); close(); go('taskito'); }
+  catch (e) { fallo(e); }
+}
+function formTarea(tid) {
+  const a = ap(), t = tid ? a.tareas.find(x => x.id === tid) : null;
+  sheet(t ? 'Editar tarea' : 'Nueva tarea', `
+  <div class="fg"><label>Nombre</label><input id="tn" placeholder="Limpiar filtro" value="${t ? esc(t.nombre) : ''}"></div>
+  <div class="fl"><div class="fg" style="width:130px"><label>Cada N días</label>
+    <input id="tf" type="number" min="1" inputmode="numeric" class="mono" value="${t ? (t.freq_dias || '') : ''}"
+      ${t && t.bajo_demanda ? 'disabled' : ''}></div>
+    <div class="fg grow"><label>Consumible</label>
+    <select id="tp"><option value="">Ninguno</option>
+      ${a.cons.map(c => `<option value="${esc(c.codigo)}" ${t && t.producto === c.codigo ? 'selected' : ''}>${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join('')}
+    </select></div></div>
+  <div class="fg"><label>Instrucciones</label>
+    <textarea id="ti" style="min-height:120px;line-height:1.55" placeholder="1. Apaga la máquina…">${t ? esc(t.instrucciones || '') : ''}</textarea></div>
+  <div class="fl" style="margin-top:12px">
+    <button class="btn" style="flex:1;background:var(--task);color:#2A1505" data-save="tarea" data-id="${tid || 0}">Guardar</button>
+    ${t ? `<button class="btn btn-d" data-del="tarea" data-id="${tid}">Eliminar</button>` : ''}</div>`);
+}
+async function saveTarea(tid) {
+  const a = ap(), nombre = val('tn'); if (!nombre) return $('tn').focus();
+  const f = parseInt(val('tf'), 10);
+  const o = { nombre, freq_dias: f || null, producto: val('tp') || null, instrucciones: val('ti') || null };
+  try {
+    if (tid) {
+      const u = await api.editTarea(tid, o);
+      const t = a.tareas.find(x => x.id === tid); Object.assign(t, u);
+      toast('Tarea actualizada');
+    } else {
+      const clave = nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\W+/g, '_').slice(0, 24) + '_' + Date.now().toString(36).slice(-4);
+      const n = await api.addTarea({ ...o, aparato_id: a.id, clave, bajo_demanda: !f, orden: a.tareas.length + 1 });
+      a.tareas.push({ ...n, log: [], videos: [], ultima: null });
+      toast('Tarea creada');
+    }
+    close(); render();
+  } catch (e) { fallo(e); }
+}
+async function borrarTarea(tid) {
+  const a = ap();
+  try { await api.delTarea(tid); a.tareas = a.tareas.filter(x => x.id !== tid);
+    a.log = a.log.filter(l => l.tarea_id !== tid); toast('Tarea eliminada'); close(); render(); }
+  catch (e) { fallo(e); }
+}
+
+/* ── plansito ── */
+function vPlansito() {
+  const l = filt === 'todos' ? D.planes : D.planes.filter(p => p.estado === filt);
+  return `<div class="view">
+  <div class="hrow"><div class="h1">Plansito</div><span class="sub">${D.planes.length} planes</span></div>
+  <div class="card mb" style="padding:12px 13px">
+    <textarea id="pt" placeholder="Cambiar el grinder por uno de muelas cónicas…" style="min-height:64px;resize:vertical"></textarea>
+    <div class="fl" style="margin-top:7px">
+      <select id="pe" style="flex:1"><option value="idea">Idea</option><option value="curso">En curso</option></select>
+      <button class="btn" style="background:var(--plan);color:#120E28;flex:none" data-act="plan-add">Apuntar</button></div></div>
+  <div class="tabs">${[['todos', 'Todos'], ['idea', 'Ideas'], ['curso', 'En curso'], ['hecho', 'Hechos'], ['desc', 'Descartados']]
+    .map(([k, lb]) => `<button class="tab ${filt === k ? 'on' : ''}" data-filt="${k}">${lb}</button>`).join('')}</div>
+  ${l.length ? `<div class="card">${l.map(p => { const e = EST[p.estado] || EST.idea;
+    return `<div class="row tap" style="align-items:flex-start" data-plan="${p.id}">
+      <span class="st" style="background:${e[1]}"></span>
+      <div class="grow"><div class="t1">${esc(p.titulo)}</div>${p.notas ? `<div class="t2">${esc(p.notas)}</div>` : ''}
+        <div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap">
+          <span class="chip" style="background:var(--sur2);color:var(--tx2)">${esc(p.categoria)}</span>
+          ${p.coste_estimado ? `<span class="chip mono" style="color:var(--tx3)">~${eur(p.coste_estimado)}</span>` : ''}
+          <span class="chip" style="color:${e[1]}">${e[0]}</span></div></div></div>`;
+  }).join('')}</div>` : '<div class="empty">Nada aquí todavía.</div>'}</div>`;
+}
+async function addPlan() {
+  const el = $('pt'), v = el.value.trim(); if (!v) return el.focus();
+  const ln = v.split('\n');
+  try {
+    const n = await api.addPlan({ titulo: ln[0].slice(0, 200), notas: ln.slice(1).join(' ').trim() || null, estado: $('pe').value });
+    D.planes.unshift(n);
+    toast('Apuntado', async () => { await api.delPlan(n.id); D.planes = D.planes.filter(x => x.id !== n.id); });
+    render();
+  } catch (e) { fallo(e); }
+}
+function formPlan(id) {
+  const p = D.planes.find(x => x.id === id);
+  sheet('Editar plan', `
+  <div class="fg"><label>Título</label><input id="qt" value="${esc(p.titulo)}"></div>
+  <div class="fg"><label>Notas</label><textarea id="qn" style="min-height:70px">${esc(p.notas || '')}</textarea></div>
+  <div class="fl"><div class="fg grow"><label>Categoría</label><input id="qc" value="${esc(p.categoria)}"></div>
+    <div class="fg" style="width:120px"><label>Coste est.</label>
+    <input id="qe" type="number" step="1" inputmode="decimal" class="mono" value="${p.coste_estimado || ''}"></div></div>
+  <div class="fg"><label>Estado</label><div class="seg" id="segEst">
+    ${Object.entries(EST).map(([k, e]) => `<button data-est="${k}" class="${p.estado === k ? 'on' : ''}"
+      style="${p.estado === k ? 'border-color:' + e[1] + ';color:' + e[1] : ''}">${e[0]}</button>`).join('')}</div></div>
+  <div class="fl" style="margin-top:12px">
+    <button class="btn" style="flex:1;background:var(--plan);color:#120E28" data-save="plan" data-id="${id}">Guardar</button>
+    <button class="btn btn-d" data-del="plan" data-id="${id}">Eliminar</button></div>`);
+  window._est = p.estado;
+}
+async function savePlan(id) {
+  const o = {
+    titulo: val('qt') || 'Sin título', notas: val('qn') || null,
+    categoria: val('qc') || 'Sin categoría',
+    coste_estimado: parseFloat(val('qe')) || null, estado: window._est
+  };
+  try { const u = await api.editPlan(id, o); Object.assign(D.planes.find(x => x.id === id), u);
+    toast('Plan actualizado'); close(); render(); }
+  catch (e) { fallo(e); }
+}
+async function borrarPlan(id) {
+  try { await api.delPlan(id); D.planes = D.planes.filter(x => x.id !== id); toast('Plan eliminado'); close(); render(); }
+  catch (e) { fallo(e); }
+}
+
+/* ══ eventos (delegación global) ══ */
+document.addEventListener('click', async ev => {
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-save],[data-del],[data-tipo],[data-ico],[data-est]');
+  if (!el) {
+    if (ev.target.classList.contains('ov')) close();
+    return;
+  }
+  const d = el.dataset;
+
+  if (d.go) return go(d.go);
+  if (d.tab) { tab = d.tab; cat = null; return render(); }
+  if (d.per) { per = d.per; return render(); }
+  if (d.cat !== undefined && d.cat) { cat = cat === d.cat ? null : d.cat; return render(); }
+  if (d.filt) { filt = d.filt; return render(); }
+  if (d.gasto) return formGasto(+d.gasto);
+  if (d.frec) return formGasto(null, d.frec);
+  if (d.ing) return formIngreso(+d.ing);
+  if (d.fijo) return formFijo(+d.fijo);
+  if (d.toggle) return toggleFijo(+d.toggle);
+  if (d.pagar) return pagarFijo(+d.pagar);
+  if (d.hist) return histItem(d.hist);
+  if (d.aparato) return go('aparato', d.aparato);
+  if (d.tareaEdit) return formTarea(+d.tareaEdit);
+  if (d.hecho) { if (d.close) close(); return marcarHecho(+d.hecho); }
+  if (d.tarea) return verTarea(+d.tarea);
+  if (d.stock) return ajustarStock(+d.stock, +d.d);
+  if (d.plan) return formPlan(+d.plan);
+
+  if (d.tipo !== undefined) {
+    window._tipo = d.tipo;
+    $('segTipo').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.tipo === d.tipo));
+    return;
+  }
+  if (d.ico) {
+    window._ico = d.ico;
+    $('segIco').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.ico === d.ico));
+    return;
+  }
+  if (d.est) {
+    window._est = d.est;
+    $('segEst').querySelectorAll('button').forEach(b => {
+      const on = b.dataset.est === d.est;
+      b.classList.toggle('on', on);
+      b.style.borderColor = on ? EST[b.dataset.est][1] : '';
+      b.style.color = on ? EST[b.dataset.est][1] : '';
+    });
+    return;
+  }
+
+  if (d.save) {
+    const id = +d.id || 0;
+    el.disabled = true;
+    const f = { gasto: saveGasto, ingreso: saveIngreso, budget: saveBudget, fijo: saveFijo,
+                aparato: saveAparato, tarea: saveTarea, plan: savePlan }[d.save];
+    await f(id);
+    el.disabled = false;
+    return;
+  }
+  if (d.del) {
+    const id = +d.id;
+    const f = { gasto: borrarGasto, ingreso: borrarIngreso, fijo: borrarFijo,
+                aparato: borrarAparato, tarea: borrarTarea, plan: borrarPlan }[d.del];
+    return f(id);
+  }
+
+  switch (d.act) {
+    case 'cerrar': return close();
+    case 'gasto-nuevo': return formGasto();
+    case 'gasto-nuevo-home': go('cashito'); return formGasto();
+    case 'ing-nuevo': return formIngreso();
+    case 'fijo-nuevo': return formFijo();
+    case 'budget': return formBudget();
+    case 'csv': return csv();
+    case 'aparato-nuevo': return formAparato();
+    case 'aparato-editar': return formAparato(ap().id);
+    case 'tarea-nueva': return formTarea();
+    case 'plan-add': return addPlan();
+    case 'salir': await api.logout(); return location.reload();
+  }
+});
+document.addEventListener('change', ev => {
+  if (ev.target.id === 'fc') subOpts('fc', 'fs');
+  if (ev.target.id === 'xc') subOpts('xc', 'xs');
+});
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') close(); });
+$('bg').onclick = () => {
+  const o = $('dw').classList.toggle('open');
+  $('bg').classList.toggle('on', o); $('bg').setAttribute('aria-expanded', o);
+};
+$('tsun').onclick = async () => {
+  const f = undoFn; undoFn = null;
+  $('ts').classList.remove('show');
+  if (f) { try { await f(); } catch (e) { fallo(e); } render(); }
+};
+
+/* ══ render ══ */
+function render() {
+  const acc = getComputedStyle(document.documentElement).getPropertyValue(ACC[view]).trim();
+  document.documentElement.style.setProperty('--sweep', acc || '#52B788');
+  const s = $('scan'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go');
+  const v = { home: vHome, cashito: vCashito, taskito: vTaskito, aparato: vAparato, plansito: vPlansito }[view];
+  $('app').innerHTML = v();
+  $('mk').style.color = 'var(' + ACC[view] + ')';
+  crumb(); drawer();
+  if (view === 'cashito' && tab === 'analisis') requestAnimationFrame(() => { donut(); line(); });
+  else { if (ch1) { ch1.destroy(); ch1 = null; } if (ch2) { ch2.destroy(); ch2 = null; } }
+}
+
+/* ══ arranque ══ */
+async function arrancar() {
+  $('boot').classList.remove('hide');
+  try {
+    D = await api.cargarTodo();
+    $('boot').classList.add('hide');
+    $('auth').classList.add('hide');
+    $('shell').classList.remove('hide');
+    render();
+    api.escuchar(async () => {
+      if (silencio) return;
+      silencio = true;
+      setTimeout(async () => {
+        try { D = await api.cargarTodo(); render(); } catch (e) { console.error(e); }
+        silencio = false;
+      }, 400);
+    });
+  } catch (e) {
+    $('boot').classList.add('hide');
+    fallo(e);
+  }
+}
+function mostrarLogin(msg) {
+  $('boot').classList.add('hide');
+  $('shell').classList.add('hide');
+  $('auth').classList.remove('hide');
+  if (msg) $('au-err').textContent = msg;
+}
+$('au-btn').onclick = async () => {
+  $('au-err').textContent = '';
+  $('au-btn').disabled = true;
+  const { error } = await api.login(val('au-mail'), $('au-pass').value);
+  $('au-btn').disabled = false;
+  if (error) return $('au-err').textContent = 'Correo o contraseña incorrectos';
+  $('auth').classList.add('hide');
+  arrancar();
+};
+$('au-pass').addEventListener('keydown', e => { if (e.key === 'Enter') $('au-btn').click(); });
+
+(async () => {
+  const s = await api.session();
+  if (s) arrancar(); else mostrarLogin();
+})();
