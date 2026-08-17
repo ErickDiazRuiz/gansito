@@ -27,7 +27,8 @@ const IC = {
   wash: '<rect x="4" y="3" width="16" height="18" rx="2.5"/><circle cx="12" cy="14" r="4"/><path d="M7.5 6.5h.01M11 6.5h.01"/>',
   tool: '<path d="M14.5 5.5a4.5 4.5 0 0 0 5.9 5.9L21 12l-9 9-3-3 9-9z"/><path d="M8 8 4 4M3 9l6-6"/>',
   bread: '<path d="M4 11.5c0-3.6 3.6-5.5 8-5.5s8 1.9 8 5.5c0 1.3-1 2.1-2 2.1v3.6a2.3 2.3 0 0 1-2.3 2.3H8.3A2.3 2.3 0 0 1 6 17.2v-3.6c-1 0-2-.8-2-2.1z"/><path d="M9 9.5c.6 1 .3 2-.4 2.8M13 9.4c.6 1 .3 2-.4 2.8"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>'
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="M4.5 12.5 9 17 19.5 6.5"/>'
 };
 const sv = (n, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w || 1.7}" stroke-linecap="round" stroke-linejoin="round">${IC[n] || IC.box}</svg>`;
 const ICONOS = ['coffee', 'bike', 'wash', 'tool', 'box'];
@@ -609,16 +610,8 @@ function vAparato() {
   <div class="hrow"><div class="h1">${esc(a.nombre)}</div><span class="sub">${esc(a.modelo || '')}</span></div>
 
   <div class="lbl">Cronograma</div>
-  <div class="card mb">${prog.length ? prog.map(t => {
-    const r = restan(t), late = r < 0;
-    const w = late ? `Vencida hace ${-r} día${r < -1 ? 's' : ''}` : (r === 0 ? 'Hoy' : `En ${r} días`);
-    return `<div class="row"><div class="grow tap" data-tarea="${t.id}">
-      <div class="t1">${esc(t.nombre)}</div>
-      <div class="t2" style="${late ? 'color:var(--task)' : ''}">${w} · cada ${t.freq_dias} d${t.producto ? ' · ' + esc(t.producto) : ''}</div></div>
-      ${t.videos.length ? `<button class="btn btn-q" style="padding:6px 8px;line-height:0" aria-label="Video" data-tarea="${t.id}">
-        <span style="display:block;width:13px;height:13px">${sv('play', 1.9)}</span></button>` : ''}
-      <button class="btn ${late ? '' : 'btn-q'}" ${late ? 'style="background:var(--task);color:#2A1505"' : ''} data-hecho="${t.id}">Hecho</button></div>`;
-  }).join('') : '<div class="empty">Sin tareas. Añade una abajo.</div>'}</div>
+  <div class="card mb">${prog.length ? prog.map(t => filaTarea(t)).join('')
+    : '<div class="empty">Sin tareas. Añade una abajo.</div>'}</div>
 
   ${od.length ? `<div class="lbl">Bajo demanda</div>
   <div class="card mb">${od.map(t => `<div class="row">
@@ -642,21 +635,92 @@ function vAparato() {
   <div class="fl"><button class="btn btn-q" style="flex:1" data-act="tarea-nueva">+ Tarea</button>
     <button class="btn btn-q" data-act="aparato-editar">Editar aparato</button></div></div>`;
 }
+/* El botón cuenta el estado del ciclo, no repite "Hecho" siempre.
+   hoy → bloqueado con la fecha
+   vencida → sólido, urgente
+   ≤2 días → discreto pero accionable
+   lejos → solo informa cuánto falta */
+function filaTarea(t) {
+  const r = restan(t);
+  const hechaHoy = t.ultima && iso(t.ultima) === hoy();
+  const late = r < 0;
+  const cuando = late ? `Vencida hace ${-r} día${r < -1 ? 's' : ''}`
+    : r === 0 ? 'Toca hoy' : r === 1 ? 'Mañana' : `En ${r} días`;
+  const prox = proxima(t);
+
+  let btn;
+  if (hechaHoy) {
+    btn = `<button class="btn btn-done" disabled>
+      <span style="display:inline-block;width:11px;height:11px;vertical-align:-1px;margin-right:4px">${sv('check', 2.4)}</span>${r} d</button>`;
+  } else if (late) {
+    btn = `<button class="btn" style="background:var(--task);color:#2A1505" data-hecho="${t.id}">Hecho</button>`;
+  } else if (r <= 2) {
+    btn = `<button class="btn btn-q" data-hecho="${t.id}">Hecho</button>`;
+  } else {
+    btn = `<button class="btn btn-soft" data-hecho="${t.id}" title="Adelantar">${r} d</button>`;
+  }
+
+  return `<div class="row"${hechaHoy ? ' style="opacity:.55"' : ''}>
+    <div class="grow tap" data-tarea="${t.id}">
+      <div class="t1">${esc(t.nombre)}</div>
+      <div class="t2" style="${late ? 'color:var(--task)' : ''}">${
+        hechaHoy ? 'Hecha hoy · vuelve el ' + fechaCorta(prox)
+                 : cuando + ' · ' + fechaCorta(prox)}${t.producto ? ' · ' + esc(t.producto) : ''}</div></div>
+    ${t.videos.length ? `<button class="btn btn-q" style="padding:6px 8px;line-height:0" aria-label="Video" data-tarea="${t.id}">
+      <span style="display:block;width:13px;height:13px">${sv('play', 1.9)}</span></button>` : ''}
+    ${btn}</div>`;
+}
+const fechaCorta = f => f ? new Date(f + 'T12:00').toLocaleDateString('es-ES',
+  { weekday: 'short', day: 'numeric', month: 'short' }) : '—';
+
 function verTarea(tid) {
   const a = ap(), t = a.tareas.find(x => x.id === tid);
-  const r = restan(t);
+  const r = restan(t), hechaHoy = t.ultima && iso(t.ultima) === hoy();
+  const hist = t.log.slice(0, 4);
   sheet(esc(t.nombre), `
   <div class="fl mb" style="flex-wrap:wrap">
     ${t.freq_dias ? `<span class="chip" style="background:var(--sur2);color:var(--tx2)">Cada ${t.freq_dias} días</span>` : ''}
     ${t.producto ? `<span class="chip mono" style="background:var(--task-bg);color:var(--task)">${esc(t.producto)}</span>` : ''}
-    ${r != null ? `<span class="chip" style="color:var(--tx3)">${r < 0 ? 'vencida hace ' + (-r) + ' d' : 'en ' + r + ' d'}</span>` : ''}
-    ${t.ultima ? `<span class="chip" style="color:var(--tx3)">última ${dstr(t.ultima)}</span>` : ''}</div>
+    ${r != null ? `<span class="chip" style="color:${r < 0 ? 'var(--task)' : 'var(--tx3)'}">${
+      r < 0 ? 'vencida hace ' + (-r) + ' d' : r === 0 ? 'toca hoy' : 'en ' + r + ' d'}</span>` : ''}</div>
+
+  <div class="card mb" style="padding:11px 12px;background:var(--sur2);border:none">
+    <div class="fl" style="justify-content:space-between">
+      <div><div class="t2">Última vez</div>
+        <div class="t1" style="margin-top:2px">${t.ultima ? fechaCorta(iso(t.ultima)) : 'nunca'}</div></div>
+      <div style="text-align:right"><div class="t2">Próxima</div>
+        <div class="t1" style="margin-top:2px;color:${r < 0 ? 'var(--task)' : 'var(--tx)'}">${fechaCorta(proxima(t))}</div></div></div></div>
+
   <div id="vidbox">${t.videos.length ? '<div class="empty">Cargando video…</div>' : ''}</div>
   <div class="instr">${esc(t.instrucciones || 'Sin instrucciones.')}</div>
+
+  ${hist.length ? `<div class="lbl" style="margin-top:14px">Últimas veces</div>
+  <div class="card mb">${hist.map(l => `<div class="row" style="padding:9px 12px">
+    <div class="grow"><div class="t2">${fechaCorta(iso(l.fecha))}</div></div>
+    <button class="btn btn-q" style="padding:4px 9px;font-size:11px" data-dellog="${l.id}">Deshacer</button></div>`).join('')}</div>` : ''}
+
   <div class="fl" style="margin-top:14px">
-    <button class="btn" style="flex:1;background:var(--task);color:#2A1505" data-hecho="${t.id}" data-close="1">Marcar como hecho</button>
+    ${hechaHoy
+      ? `<button class="btn btn-done" style="flex:1" disabled>Ya la hiciste hoy</button>`
+      : `<button class="btn" style="flex:1;background:var(--task);color:#2A1505" data-hecho="${t.id}" data-close="1">Marcar como hecho</button>`}
     <button class="btn btn-q" data-tarea-edit="${t.id}">Editar</button></div>`);
   if (t.videos.length) cargarVideos(t.videos);
+}
+
+/* Borrar un registro concreto del historial: corrige un "hecho" por error
+   sin depender de que el deshacer del toast siga vivo. */
+async function borrarLog(lid) {
+  const a = ap();
+  const t = a.tareas.find(x => x.log.some(l => l.id === lid));
+  if (!t) return;
+  try {
+    await api.delLog(lid);
+    t.log = t.log.filter(l => l.id !== lid);
+    t.ultima = t.log.length ? t.log[0].fecha : null;
+    a.log = a.log.filter(l => l.id !== lid);
+    toast('Registro borrado');
+    close(); render();
+  } catch (e) { fallo(e); }
 }
 async function cargarVideos(vs) {
   try {
@@ -1191,7 +1255,7 @@ async function borrarPlan(id) {
 
 /* ══ eventos (delegación global) ══ */
 document.addEventListener('click', async ev => {
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dur]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dur],[data-dellog]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -1218,6 +1282,7 @@ document.addEventListener('click', async ev => {
   if (d.plan) return formPlan(+d.plan);
   if (d.cultivo) return go('cultivo', d.cultivo);
   if (d.registro) return formRegistro(+d.registro);
+  if (d.dellog) return borrarLog(+d.dellog);
 
   if (d.mk) {
     window._mk[d.mk] = !window._mk[d.mk];

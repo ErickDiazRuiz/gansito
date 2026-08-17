@@ -94,6 +94,10 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .btn-q{border:1px solid var(--bdr2);color:var(--tx2)}
 .btn-q:hover{background:var(--sur2);color:var(--tx)}
 .btn-d{border:1px solid #4A1519;color:#E06A72}
+.btn-done{background:var(--sur3);color:var(--cash);cursor:default}
+.btn-done:hover{filter:none}
+.btn-soft{color:var(--tx3);font-family:'DM Mono',monospace;font-weight:400;padding:7px 10px}
+.btn-soft:hover{color:var(--tx2);background:var(--sur2)}
 .btn-d:hover{background:var(--dng-bg)}
 .track{height:4px;background:var(--sur3);border-radius:3px;overflow:hidden}
 .track i{display:block;height:100%;border-radius:3px}
