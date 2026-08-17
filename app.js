@@ -86,6 +86,10 @@ const LBLR = { top: 'recomendada', buena: 'buena', ok: 'aceptable', evitar: 'no 
 const optsHarina = (grupos, sel) => HARINAS.filter(x => grupos.includes(x.g) || x.g === 'ambas')
   .map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${x.id}</option>`).join('');
 
+/* Clave pública VAPID. Es pública por diseño: identifica al servidor
+   que envía. La privada vive solo en GitHub Secrets. */
+const VAPID_PUBLIC = 'BJnEn8FyVv_vlPC9K0LiZzM2g9OKPcPg263gu6lBoNiQToC23RCpzDiKjiDPdcSqFvQ_vXf0Cy-iHDxZdEBTZ8Q';
+
 const OLORES = [['acido-frutal','Ácido / frutal'],['neutro','Neutro'],['queso','Queso / pies'],
                 ['acetona','Acetona'],['podrido','Podrido']];
 
@@ -587,6 +591,8 @@ const ap = () => D.aparatos.find(a => String(a.id) === String(arg));
 function vGansirato() {
   return `<div class="view">
   <div class="hrow"><div class="h1">Gansirato</div><span class="sub">${D.aparatos.length} aparatos</span></div>
+  <div class="card mb" style="padding:12px 13px"><div class="lbl">Notificaciones</div>
+    <div id="pushbox"><div class="t2">Comprobando…</div></div></div>
   ${D.aparatos.map(a => {
     const v = vencidasDe(a), pr = progTareas(a).map(restan).filter(x => x != null).sort((x, y) => x - y)[0];
     return `<button class="proj" data-aparato="${a.id}"><div class="ptop">
@@ -1253,6 +1259,77 @@ async function borrarPlan(id) {
   catch (e) { fallo(e); }
 }
 
+/* ══ notificaciones push ══ */
+const pushSoportado = () => 'serviceWorker' in navigator && 'PushManager' in window;
+const b64 = s => {
+  const p = '='.repeat((4 - s.length % 4) % 4);
+  const raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+};
+async function estadoPush() {
+  if (!pushSoportado()) return 'no-soportado';
+  if (Notification.permission === 'denied') return 'bloqueado';
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = reg && await reg.pushManager.getSubscription();
+  return sub ? 'activo' : 'inactivo';
+}
+async function activarPush() {
+  try {
+    if (!pushSoportado()) return toast('Este navegador no soporta notificaciones', null, true);
+    if (VAPID_PUBLIC.startsWith('PEGA')) return toast('Falta la clave VAPID en app.js', null, true);
+
+    const permiso = await Notification.requestPermission();
+    if (permiso !== 'granted') return toast('Permiso denegado', null, true);
+
+    const reg = await navigator.serviceWorker.register('sw.js');
+    await navigator.serviceWorker.ready;
+
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true, applicationServerKey: b64(VAPID_PUBLIC)
+    });
+
+    const j = sub.toJSON();
+    await api.guardarSub({
+      endpoint: sub.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth,
+      etiqueta: /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'móvil' : 'escritorio'
+    });
+    toast('Notificaciones activadas');
+    render();
+  } catch (e) { fallo(e); }
+}
+async function desactivarPush() {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && await reg.pushManager.getSubscription();
+    if (sub) { await api.borrarSub(sub.endpoint); await sub.unsubscribe(); }
+    toast('Notificaciones desactivadas');
+    render();
+  } catch (e) { fallo(e); }
+}
+async function pintaPush() {
+  const box = $('pushbox'); if (!box) return;
+  const st = await estadoPush();
+  const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (iOS && !standalone) {
+    box.innerHTML = `<div class="t2">En iPhone las notificaciones solo funcionan si añades Gansito a la pantalla de inicio: Compartir → Añadir a inicio, y ábrelo desde ahí.</div>`;
+    return;
+  }
+  box.innerHTML = {
+    'no-soportado': `<div class="t2">Este navegador no soporta notificaciones push.</div>`,
+    'bloqueado': `<div class="t2">Bloqueadas en los ajustes del navegador. Permítelas para este sitio y vuelve.</div>`,
+    'activo': `<div class="fl" style="align-items:center">
+        <div class="grow"><div class="t1" style="color:var(--cash)">Activas en este dispositivo</div>
+          <div class="t2">Aviso diario a las 7:00 si algo vence o vence mañana.</div></div>
+        <button class="btn btn-q" data-act="push-off">Desactivar</button></div>`,
+    'inactivo': `<div class="fl" style="align-items:center">
+        <div class="grow"><div class="t1">Desactivadas</div>
+          <div class="t2">Recibe un aviso diario cuando algo esté por vencer.</div></div>
+        <button class="btn" style="background:var(--task);color:#2A1505" data-act="push-on">Activar</button></div>`
+  }[st];
+}
+
 /* ══ eventos (delegación global) ══ */
 document.addEventListener('click', async ev => {
   const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dur],[data-dellog]');
@@ -1358,6 +1435,8 @@ document.addEventListener('click', async ev => {
     case 'guardar': return guardarNevera();
     case 'despertar': return despertar();
     case 'mant': return alimentarMant();
+    case 'push-on': return activarPush();
+    case 'push-off': return desactivarPush();
     case 'salir': await api.logout(); return location.reload();
   }
 });
@@ -1388,6 +1467,7 @@ function render() {
   $('app').innerHTML = v();
   $('mk').style.color = 'var(' + ACC[view] + ')';
   crumb(); drawer();
+  if (view === 'gansirato') pintaPush();
   if (view === 'cashito' && tab === 'analisis') requestAnimationFrame(() => { donut(); line(); });
   else if (view === 'cultivo') { if (ch1) { ch1.destroy(); ch1 = null; } requestAnimationFrame(chartMM); }
   else { if (ch1) { ch1.destroy(); ch1 = null; } if (ch2) { ch2.destroy(); ch2 = null; } }

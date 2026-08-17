@@ -98,7 +98,13 @@ La app genera URLs firmadas de una hora, así que el bucket sigue privado.
 
 ---
 
-## 5. Sobre el bot apagado
+## 5. Notificaciones
+
+Ver `NOTIFICACIONES.md`. Un cron diario en GitHub Actions revisa vencimientos y manda un push, con la web cerrada. Gratis.
+
+---
+
+## 6. Sobre el bot apagado
 
 Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos del día y la alerta al 80% del presupuesto. Eran lo único que necesitaba un proceso corriendo. Si algún día quieres recuperar la alerta, un GitHub Action con `schedule:` la cubre gratis.
 
@@ -132,6 +138,11 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 | `db2.sql` | Gansirato + módulo de masa madre. Después de `db.sql`. |
 | `db3.sql` | Plan de cultivo y modo nevera. Después de `db2.sql`. |
 | `db4.sql` | Harina de arranque separada. Después de `db3.sql`. |
+| `db5.sql` | Suscripciones push y vista de pendientes. Después de `db4.sql`. |
+| `sw.js` | Service Worker: recibe los push con la web cerrada. |
+| `cron/avisar.mjs` | Job diario que revisa vencimientos y envía los avisos. |
+| `.github/workflows/avisos.yml` | El cron de GitHub Actions. |
+| `NOTIFICACIONES.md` | Cómo montar las notificaciones, paso a paso. |
 | `config.js` | Tus claves de Supabase. |
 | `supabase.js` | Cliente, auth, lectura paginada, escrituras. |
 | `app.js` | Estado, vistas y eventos. |

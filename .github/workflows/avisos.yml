@@ -1,0 +1,27 @@
+name: Avisos de mantenimiento
+
+on:
+  schedule:
+    # 07:00 Europe/Berlin. GitHub usa UTC: 06:00 en verano, 05:00 sería invierno.
+    - cron: '0 6 * * *'
+  workflow_dispatch:        # botón manual para probar
+
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --omit=dev
+        working-directory: cron
+      - run: node avisar.mjs
+        working-directory: cron
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VAPID_PUBLIC:         ${{ secrets.VAPID_PUBLIC }}
+          VAPID_PRIVATE:        ${{ secrets.VAPID_PRIVATE }}
+          VAPID_SUBJECT:        ${{ secrets.VAPID_SUBJECT }}
+          APP_URL:              https://erickdiazruiz.github.io/gansito/

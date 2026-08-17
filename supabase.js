@@ -9,6 +9,7 @@ const cash = () => sb.schema('cashito');
 const gans = () => sb.schema('gansirato');   // aparatos y mantenimiento
 const task = () => sb.schema('taskito');     // procesos vivos (masa madre)
 const plan = () => sb.schema('plansito');
+const gnst = () => sb.schema('gansito');    // infraestructura (push)
 
 /* ── auth ── */
 export const session = async () => (await sb.auth.getSession()).data.session;
@@ -129,6 +130,14 @@ export async function urlVideo(storage_path) {
   if (error) throw error;
   return data.signedUrl;
 }
+
+/* ── notificaciones push ── */
+export const listarSubs = async () => {
+  const { data, error } = await gnst().from('push_subs').select('*');
+  if (error) throw error; return data;
+};
+export const guardarSub = (s) => one(gnst().from('push_subs').upsert(s, { onConflict: 'endpoint' }));
+export const borrarSub  = (endpoint) => gnst().from('push_subs').delete().eq('endpoint', endpoint);
 
 /* ── tiempo real ──
    Cualquier escritura (esta pestaña, otra, o un script) repinta la vista. */
