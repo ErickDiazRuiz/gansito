@@ -57,6 +57,19 @@ where t.bajo_demanda = false
 
 grant select on gansito.v_pendientes to authenticated, service_role;
 
+-- ============================================================
+--  Permisos para el cron.
+--  service_role salta RLS, pero necesita USAGE sobre el esquema
+--  igual que cualquier otro rol: sin esto devuelve 42501.
+-- ============================================================
+grant usage on schema gansito to service_role;
+grant select, insert, update, delete on all tables in schema gansito to service_role;
+grant usage, select on all sequences in schema gansito to service_role;
+
+-- El cron también mira las masas madre en nevera
+grant usage on schema taskito to service_role;
+grant select on all tables in schema taskito to service_role;
+
 notify pgrst, 'reload schema';
 
 select 'Listo. Añade gansito a Exposed schemas.' as resultado;

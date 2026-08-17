@@ -88,7 +88,7 @@ const optsHarina = (grupos, sel) => HARINAS.filter(x => grupos.includes(x.g) || 
 
 /* Clave pública VAPID. Es pública por diseño: identifica al servidor
    que envía. La privada vive solo en GitHub Secrets. */
-const VAPID_PUBLIC = 'BJnEn8FyVv_vlPC9K0LiZzM2g9OKPcPg263gu6lBoNiQToC23RCpzDiKjiDPdcSqFvQ_vXf0Cy-iHDxZdEBTZ8Q';
+const VAPID_PUBLIC = 'PEGA_AQUI_TU_CLAVE_PUBLICA';
 
 const OLORES = [['acido-frutal','Ácido / frutal'],['neutro','Neutro'],['queso','Queso / pies'],
                 ['acetona','Acetona'],['podrido','Podrido']];
@@ -656,8 +656,8 @@ function filaTarea(t) {
 
   let btn;
   if (hechaHoy) {
-    btn = `<button class="btn btn-done" disabled>
-      <span style="display:inline-block;width:11px;height:11px;vertical-align:-1px;margin-right:4px">${sv('check', 2.4)}</span>${r} d</button>`;
+    btn = `<button class="btn btn-done" disabled aria-label="Hecha hoy, vuelve en ${r} días">
+      <span class="ck">${sv('check', 2.6)}</span>${r} d</button>`;
   } else if (late) {
     btn = `<button class="btn" style="background:var(--task);color:#2A1505" data-hecho="${t.id}">Hecho</button>`;
   } else if (r <= 2) {
@@ -666,7 +666,7 @@ function filaTarea(t) {
     btn = `<button class="btn btn-soft" data-hecho="${t.id}" title="Adelantar">${r} d</button>`;
   }
 
-  return `<div class="row"${hechaHoy ? ' style="opacity:.55"' : ''}>
+  return `<div class="row">
     <div class="grow tap" data-tarea="${t.id}">
       <div class="t1">${esc(t.nombre)}</div>
       <div class="t2" style="${late ? 'color:var(--task)' : ''}">${
