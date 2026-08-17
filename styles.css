@@ -94,14 +94,25 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .btn-q{border:1px solid var(--bdr2);color:var(--tx2)}
 .btn-q:hover{background:var(--sur2);color:var(--tx)}
 .btn-d{border:1px solid #4A1519;color:#E06A72}
-.btn-done{background:var(--cash-bg);color:var(--cash);border:1px solid var(--cash);
-  cursor:default;font-family:'DM Mono',monospace;font-weight:500;
-  display:inline-flex;align-items:center;gap:5px;animation:done .4s cubic-bezier(.3,1.4,.5,1)}
-.btn-done:hover{filter:none}
-.btn-done .ck{display:block;width:12px;height:12px;flex:none}
+/* Columna de estado: ancho y alto fijos para que los bordes se alineen
+   fila a fila. Lo que distingue los estados es el color, no la forma. */
+.est{width:66px;padding:8px 0;border-radius:8px;flex:none;text-align:center;
+  font-size:12px;font-family:'DM Mono',monospace;border:1px solid transparent;
+  box-sizing:border-box;transition:background .15s,color .15s}
+.est-go{background:var(--task);color:#2A1505;font-family:'DM Sans',sans-serif;font-weight:600}
+.est-go:hover{filter:brightness(1.12)}
+.est-ok{background:var(--cash-bg);border-color:#1E5741;color:var(--cash);cursor:default;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  animation:done .4s cubic-bezier(.3,1.4,.5,1)}
+.est-ok .ck{display:block;width:11px;height:11px;flex:none}
 @keyframes done{0%{transform:scale(.86)}60%{transform:scale(1.05)}100%{transform:scale(1)}}
-.btn-soft{color:var(--tx3);font-family:'DM Mono',monospace;font-weight:400;padding:7px 10px}
-.btn-soft:hover{color:var(--tx2);background:var(--sur2)}
+.est-mid{background:var(--sur2);color:var(--tx2)}
+.est-far{background:#0F0F0E;color:#4E4C47}
+.est-mid:hover,.est-far:hover{background:var(--sur3);color:var(--tx)}
+
+/* Barra de urgencia: se ve antes de leer nada */
+.row.urge{border-left:2px solid var(--task)}
+.card .row{border-left:2px solid transparent}
 .btn-d:hover{background:var(--dng-bg)}
 .track{height:4px;background:var(--sur3);border-radius:3px;overflow:hidden}
 .track i{display:block;height:100%;border-radius:3px}

@@ -650,31 +650,28 @@ function filaTarea(t) {
   const r = restan(t);
   const hechaHoy = t.ultima && iso(t.ultima) === hoy();
   const late = r < 0;
-  const cuando = late ? `Vencida hace ${-r} día${r < -1 ? 's' : ''}`
-    : r === 0 ? 'Toca hoy' : r === 1 ? 'Mañana' : `En ${r} días`;
+  const urge = !hechaHoy && r <= 0;
   const prox = proxima(t);
 
-  let btn;
-  if (hechaHoy) {
-    btn = `<button class="btn btn-done" disabled aria-label="Hecha hoy, vuelve en ${r} días">
-      <span class="ck">${sv('check', 2.6)}</span>${r} d</button>`;
-  } else if (late) {
-    btn = `<button class="btn" style="background:var(--task);color:#2A1505" data-hecho="${t.id}">Hecho</button>`;
-  } else if (r <= 2) {
-    btn = `<button class="btn btn-q" data-hecho="${t.id}">Hecho</button>`;
-  } else {
-    btn = `<button class="btn btn-soft" data-hecho="${t.id}" title="Adelantar">${r} d</button>`;
-  }
+  // Misma caja siempre: 66 px de ancho. Lo que cambia es el color.
+  let est;
+  if (hechaHoy)  est = `<button class="est est-ok" disabled aria-label="Hecha hoy, vuelve en ${r} días"><span class="ck">${sv('check', 2.6)}</span>${r} d</button>`;
+  else if (urge) est = `<button class="est est-go" data-hecho="${t.id}">Hecho</button>`;
+  else if (r <= 3) est = `<button class="est est-mid" data-hecho="${t.id}" title="Adelantar">${r} d</button>`;
+  else           est = `<button class="est est-far" data-hecho="${t.id}" title="Adelantar">${r} d</button>`;
 
-  return `<div class="row">
+  const cuando = late ? `Vencida hace ${-r} día${r < -1 ? 's' : ''}`
+    : hechaHoy ? 'Hecha hoy · vuelve el ' + fechaCorta(prox)
+    : r === 0 ? 'Toca hoy'
+    : r === 1 ? 'Mañana'
+    : `En ${r} días`;
+  const sub = hechaHoy ? cuando : `${cuando} · ${fechaCorta(prox)}`;
+
+  return `<div class="row${urge ? ' urge' : ''}">
     <div class="grow tap" data-tarea="${t.id}">
       <div class="t1">${esc(t.nombre)}</div>
-      <div class="t2" style="${late ? 'color:var(--task)' : ''}">${
-        hechaHoy ? 'Hecha hoy · vuelve el ' + fechaCorta(prox)
-                 : cuando + ' · ' + fechaCorta(prox)}${t.producto ? ' · ' + esc(t.producto) : ''}</div></div>
-    ${t.videos.length ? `<button class="btn btn-q" style="padding:6px 8px;line-height:0" aria-label="Video" data-tarea="${t.id}">
-      <span style="display:block;width:13px;height:13px">${sv('play', 1.9)}</span></button>` : ''}
-    ${btn}</div>`;
+      <div class="t2"${urge ? ' style="color:var(--task)"' : ''}>${sub}${t.producto ? ' · ' + esc(t.producto) : ''}</div></div>
+    ${est}</div>`;
 }
 const fechaCorta = f => f ? new Date(f + 'T12:00').toLocaleDateString('es-ES',
   { weekday: 'short', day: 'numeric', month: 'short' }) : '—';
@@ -707,7 +704,7 @@ function verTarea(tid) {
 
   <div class="fl" style="margin-top:14px">
     ${hechaHoy
-      ? `<button class="btn btn-done" style="flex:1" disabled>Ya la hiciste hoy</button>`
+      ? `<button class="btn" style="flex:1;background:var(--cash-bg);border:1px solid #1E5741;color:var(--cash);cursor:default" disabled>Ya la hiciste hoy</button>`
       : `<button class="btn" style="flex:1;background:var(--task);color:#2A1505" data-hecho="${t.id}" data-close="1">Marcar como hecho</button>`}
     <button class="btn btn-q" data-tarea-edit="${t.id}">Editar</button></div>`);
   if (t.videos.length) cargarVideos(t.videos);
