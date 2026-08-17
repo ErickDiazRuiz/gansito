@@ -86,6 +86,28 @@ const LBLR = { top: 'recomendada', buena: 'buena', ok: 'aceptable', evitar: 'no 
 const optsHarina = (grupos, sel) => HARINAS.filter(x => grupos.includes(x.g) || x.g === 'ambas')
   .map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${x.id}</option>`).join('');
 
+/* Recetas: el usuario elige el tipo de masa y de ahí salen las harinas,
+   la hidratación y el ratio. Nadie debería tener que decidir eso antes
+   de haber tenido una masa madre en las manos. */
+const RECETAS = [
+  { id: 'blanca', nom: 'Masa madre blanca', sub: 'La estándar. Pan de trigo, pizza, focaccia.',
+    arranque: 'Roggenvollkornmehl', mant: 'Weizenmehl Type 550', hid: 100, ratio: '1:1:1',
+    nota: 'Arranca con centeno integral porque tiene más microbiota, y se mantiene con harina de pan normal. Es la opción por defecto y la más versátil.' },
+  { id: 'centeno', nom: 'Masa madre de centeno', sub: 'Pan alemán, Vollkornbrot, sabor intenso.',
+    arranque: 'Roggenvollkornmehl', mant: 'Roggenmehl Type 1150', hid: 100, ratio: '1:1:1',
+    nota: 'Todo centeno. Es la más fácil de mantener viva y la más rápida de arrancar, pero da panes densos: no esperes miga aireada.' },
+  { id: 'integral', nom: 'Masa madre integral', sub: 'Más sabor y más actividad que la blanca.',
+    arranque: 'Weizenvollkornmehl', mant: 'Weizenmehl Type 1050', hid: 100, ratio: '1:1:1',
+    nota: 'Punto medio. Más minerales que la blanca, así que fermenta más rápido; vigila el pico porque se pasa antes.' },
+  { id: 'espelta', nom: 'Masa madre de espelta', sub: 'Dinkelbrot. Digestiva, sabor a nuez.',
+    arranque: 'Roggenvollkornmehl', mant: 'Dinkelmehl Type 630', hid: 100, ratio: '1:1:1',
+    nota: 'La espelta fermenta rápido pero su gluten es frágil. Requiere más atención al horno: si te pasas de fermentación, se desmonta.' },
+  { id: 'rigida', nom: 'Masa madre rígida', sub: 'Lievito madre. Panettone, dulces.',
+    arranque: 'Roggenvollkornmehl', mant: 'Weizenmehl Type 550', hid: 50, ratio: '1:2:1',
+    nota: 'Menos agua: queda como una bola de masa, no como papilla. Más dulce y menos ácida, pero exige alimentaciones más regulares. No la elijas como primera masa madre.' }
+];
+const receta = id => RECETAS.find(r => r.id === id) || RECETAS[0];
+
 /* Clave pública VAPID. Es pública por diseño: identifica al servidor
    que envía. La privada vive solo en GitHub Secrets. */
 const VAPID_PUBLIC = 'PEGA_AQUI_TU_CLAVE_PUBLICA';
@@ -1088,30 +1110,69 @@ async function alimentarMant() {
 
 function formCultivo(id) {
   const c = id ? D.cultivos.find(x => x.id === id) : null;
-  sheet(c ? 'Editar cultivo' : 'Nuevo cultivo', `
-  <div class="fg"><label>Nombre</label><input id="kn" placeholder="Masa madre" value="${c ? esc(c.nombre) : ''}"></div>
-  <div class="fg"><label>Harina de arranque · días 1–4</label>
-    <select id="ka">${optsHarina(['arranque'], c ? c.harina_arranque : 'Roggenvollkornmehl')}</select>
-    <div class="hint" id="hka"></div></div>
-  <div class="fg"><label>Harina de mantenimiento · resto</label>
-    <select id="kh">${optsHarina(['mant'], c ? c.harina : 'Weizenmehl Type 550')}</select>
-    <div class="hint" id="hkh"></div></div>
-  <div class="fl"><div class="fg" style="width:110px"><label>Hidratación %</label>
-    <input id="kw" type="number" inputmode="numeric" class="mono" value="${c ? c.hidratacion : 100}"></div>
-    <div class="fg" style="width:110px"><label>Ratio</label>
-    <input id="kr" class="mono" placeholder="1:1:1" value="${c ? esc(c.ratio) : '1:1:1'}"></div>
-    <div class="fg grow"><label>Inicio</label><input id="ki" type="date" value="${c ? c.inicio : hoy()}"></div></div>
-  <div class="fg"><label>Velocidad</label><div class="seg" id="segVel">
-    <button data-vel="1" class="${!c || c.velocidad === 1 ? 'on' : ''}">1 al día · más lento</button>
-    <button data-vel="2" class="${c && c.velocidad === 2 ? 'on' : ''}">2 al día · más rápido</button></div>
-    <div class="t2" style="margin-top:4px">Dos alimentaciones aceleran la transición a levaduras, pero exigen estar encima.</div></div>
-  <div class="fg"><label>Duración del plan</label><div class="seg" id="segDur">
-    ${[7, 10, 14].map(n => `<button data-dur="${n}" class="${(c ? c.plan_dias : 10) === n ? 'on' : ''}">${n} días</button>`).join('')}</div></div>
-  <div class="fl" style="margin-top:12px">
-    <button class="btn" style="flex:1;background:var(--mm);color:#04182B" data-save="cultivo" data-id="${id || 0}">Guardar</button>
+  const rid = c ? (RECETAS.find(r => r.mant === c.harina) || RECETAS[0]).id : 'blanca';
+  sheet(c ? 'Editar cultivo' : 'Nueva masa madre', `
+  <div class="fg"><label>Tipo</label>
+    <div class="opts" id="optTipo">${RECETAS.map(r => `<button data-rec="${r.id}" class="${r.id === rid ? 'on' : ''}">
+      <div class="on-nm">${r.nom}</div><div class="on-sb">${r.sub}</div></button>`).join('')}</div></div>
+  <div class="recbox" id="recbox"></div>
+
+  <div class="fg"><label>Ritmo</label><div class="seg" id="segVel">
+    <button data-vel="1" class="${!c || c.velocidad === 1 ? 'on' : ''}">Tranquilo</button>
+    <button data-vel="2" class="${c && c.velocidad === 2 ? 'on' : ''}">Rápido</button></div>
+    <div class="hint" id="hvel"></div></div>
+
+  <div class="fg"><label>Cuándo empiezas</label>
+    <input id="ki" type="date" value="${c ? c.inicio : hoy()}"></div>
+
+  <div class="fg"><label>Nombre <span style="text-transform:none;letter-spacing:0;font-weight:400">(opcional)</span></label>
+    <input id="kn" placeholder="Masa madre" value="${c ? esc(c.nombre) : ''}"></div>
+
+  <details class="avz"><summary>Ajustes avanzados</summary>
+    <div class="fl" style="margin-top:10px">
+      <div class="fg" style="width:110px"><label>Hidratación %</label>
+        <input id="kw" type="number" inputmode="numeric" class="mono" value="${c ? c.hidratacion : 100}"></div>
+      <div class="fg" style="width:110px"><label>Ratio</label>
+        <input id="kr" class="mono" value="${c ? esc(c.ratio) : '1:1:1'}"></div></div>
+    <div class="fg"><label>Harina de arranque</label>
+      <select id="ka">${optsHarina(['arranque'], c ? c.harina_arranque : 'Roggenvollkornmehl')}</select></div>
+    <div class="fg"><label>Harina de mantenimiento</label>
+      <select id="kh">${optsHarina(['mant'], c ? c.harina : 'Weizenmehl Type 550')}</select></div>
+    <div class="t2">Solo si sabes lo que haces. Cambiar el tipo de arriba sobrescribe estos valores.</div>
+  </details>
+
+  <div class="fl" style="margin-top:14px">
+    <button class="btn" style="flex:1;background:var(--mm);color:#04182B" data-save="cultivo" data-id="${id || 0}">${c ? 'Guardar' : 'Empezar'}</button>
     ${c ? `<button class="btn btn-d" data-del="cultivo" data-id="${id}">Eliminar</button>` : ''}</div>`);
+  window._rec = rid;
+  window._vel = c ? c.velocidad : 1;
+  pintaReceta(!c);
+  pintaVel();
 }
-function pintaHint(sel, dest) {
+
+/* Muestra qué implica el tipo elegido y, si es un cultivo nuevo,
+   rellena los campos avanzados con los valores de la receta. */
+function pintaReceta(aplicar) {
+  const r = receta(window._rec), box = $('recbox');
+  if (aplicar) {
+    const set = (id, v) => { const e = $(id); if (e) e.value = v; };
+    set('kw', r.hid); set('kr', r.ratio); set('ka', r.arranque); set('kh', r.mant);
+  }
+  if (!box) return;
+  box.innerHTML = `<div class="t2" style="line-height:1.55;margin-bottom:8px">${esc(r.nota)}</div>
+    <div class="fl" style="flex-wrap:wrap">
+      <span class="chip" style="background:var(--sur3);color:var(--tx2)">Arranque: ${esc(r.arranque)}</span>
+      <span class="chip" style="background:var(--sur3);color:var(--tx2)">Después: ${esc(r.mant)}</span>
+      <span class="chip mono" style="background:var(--sur3);color:var(--tx3)">${r.hid}% · ${esc(r.ratio)}</span></div>`;
+}
+function pintaVel() {
+  const h = $('hvel'); if (!h) return;
+  h.innerHTML = window._vel === 2
+    ? 'Dos alimentaciones al día, cada 12 h. Lista antes, pero tienes que estar encima.'
+    : 'Una alimentación al día. Tarda algo más y perdona los despistes. Si es tu primera vez, esta.';
+}
+
+function pintaHint(function pintaHint(sel, dest) {
   const el = $(sel), box = $(dest);
   if (!el || !box) return;
   const i = harinaInfo(el.value);
@@ -1119,12 +1180,13 @@ function pintaHint(sel, dest) {
 }
 
 async function saveCultivo(id) {
-  const nombre = val('kn') || 'Masa madre';
+  const nombre = val('kn') || receta(window._rec).nom;
   const o = { nombre, harina: val('kh') || 'Weizenmehl Type 550',
               harina_arranque: val('ka') || 'Roggenvollkornmehl',
               hidratacion: parseInt(val('kw'), 10) || 100,
               ratio: val('kr') || '1:1:1', inicio: val('ki') || hoy(),
-              velocidad: window._vel || 1, plan_dias: window._dur || 10 };
+              velocidad: window._vel || 1,
+              plan_dias: (window._vel === 2 ? 8 : 12) };
   try {
     if (id) { const u = await api.editCultivo(id, o); Object.assign(D.cultivos.find(x => x.id === id), u); toast('Cultivo actualizado'); }
     else { const n = await api.addCultivo(o); D.cultivos.push({ ...n, registros: [] }); toast('Cultivo creado'); }
@@ -1329,7 +1391,7 @@ async function pintaPush() {
 
 /* ══ eventos (delegación global) ══ */
 document.addEventListener('click', async ev => {
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dur],[data-dellog]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -1363,14 +1425,16 @@ document.addEventListener('click', async ev => {
     el.classList.toggle('on', window._mk[d.mk]);
     return;
   }
+  if (d.rec) {
+    window._rec = d.rec;
+    $('optTipo').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.rec === d.rec));
+    pintaReceta(true);
+    return;
+  }
   if (d.vel) {
     window._vel = +d.vel;
     $('segVel').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.vel === window._vel));
-    return;
-  }
-  if (d.dur) {
-    window._dur = +d.dur;
-    $('segDur').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.dur === window._dur));
+    pintaVel();
     return;
   }
 
@@ -1440,8 +1504,7 @@ document.addEventListener('click', async ev => {
 document.addEventListener('change', ev => {
   if (ev.target.id === 'fc') subOpts('fc', 'fs');
   if (ev.target.id === 'xc') subOpts('xc', 'xs');
-  if (ev.target.id === 'ka') pintaHint('ka', 'hka');
-  if (ev.target.id === 'kh') pintaHint('kh', 'hkh');
+  if (ev.target.id === 'ka' || ev.target.id === 'kh') window._rec = null;
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') close(); });
 $('bg').onclick = () => {
