@@ -1172,7 +1172,7 @@ function pintaVel() {
     : 'Una alimentación al día. Tarda algo más y perdona los despistes. Si es tu primera vez, esta.';
 }
 
-function pintaHint(function pintaHint(sel, dest) {
+function pintaHint(sel, dest) {
   const el = $(sel), box = $(dest);
   if (!el || !box) return;
   const i = harinaInfo(el.value);
