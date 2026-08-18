@@ -1433,7 +1433,7 @@ function formReceta(id) {
 }
 function pintaIngs() {
   const box = $('inglist'); if (!box) return;
-  box.innerHTML = window._ings.map((x, i) => `<div class="ingrow">
+  box.innerHTML = window._ings.map((x, i) => `<div class="ingrow" data-stop="1">
     <input class="mono" style="width:56px" inputmode="decimal" placeholder="200" value="${x.cantidad ?? ''}" data-ig="${i}" data-k="cantidad">
     <input style="width:64px" list="dlun" placeholder="g" value="${esc(x.unidad || '')}" data-ig="${i}" data-k="unidad">
     <input style="flex:1;min-width:0" placeholder="pollo" value="${esc(x.nombre || '')}" data-ig="${i}" data-k="nombre">
@@ -1665,6 +1665,11 @@ async function pintaPush() {
 
 /* ══ eventos (delegación global) ══ */
 document.addEventListener('click', async ev => {
+  // Los campos de formulario nunca disparan acciones: si el clic nace en uno,
+  // closest() podría subir a un ancestro con data-* y abrir un panel ajeno.
+  if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
+  if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
+
   const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
