@@ -1624,7 +1624,7 @@ async function guardarAlimentoRapido() {
     close();
     if (window._destAli === 'ing') elegirIng(a.id);
     else { piSel = { t: 'a', id: a.id, n: a.nombre, u: a.unidad, p: a.porcion };
-      sheet('Añadir', `<div id="pibox"></div>`); pintaCantidad(); }
+      await guardarPI(+a.porcion || 100); }
     toast('Alimento creado');
   } catch (e) { fallo(e); }
 }
@@ -1869,49 +1869,46 @@ function tarjetaPlan(p, activo) {
 
 function editorPlan(p) {
   if (!p) { planEd = null; return cPlan(); }
-  if (diaEd > p.dias) diaEd = 1;
-  const t = totalDia(p, diaEd), o = D.objetivo;
-  const l = itemsDia(p, diaEd);
-  const pk = Math.min(100, t.kcal / (+o.kcal || 1) * 100);
-  const pp = Math.min(100, t.prot / (+o.proteina || 1) * 100);
+  const o = D.objetivo;
+  let tk = 0, tp = 0;
+  for (let d = 1; d <= p.dias; d++) { const t = totalDia(p, d); tk += t.kcal; tp += t.prot; }
 
   return `<div class="fl mb" style="align-items:center">
     <button class="btn btn-q" style="padding:5px 10px" data-act="plan-volver">‹</button>
     <div class="grow" style="text-align:center"><div class="t1">${esc(p.nombre)}</div>
-      <div class="t2">${p.dias} días${p.activo ? ' · activo' : ''}</div></div>
+      <div class="t2">${p.dias} días · media ${Math.round(tk / p.dias)} kcal${p.activo ? ' · activo' : ''}</div></div>
     <button class="btn btn-q" style="padding:5px 10px" data-act="plan-ajustes">···</button></div>
 
-  <div class="dtabs">${Array.from({ length: p.dias }, (_, i) => i + 1).map(d => {
-    const td = totalDia(p, d), lleno = itemsDia(p, d).length;
-    return `<button class="dtab ${diaEd === d ? 'on' : ''}" data-diaed="${d}">
-      <span class="dnum">${d}</span>
-      <span class="dkcal">${lleno ? Math.round(td.kcal) : '·'}</span></button>`;
-  }).join('')}</div>
+  ${Array.from({ length: p.dias }, (_, i) => i + 1).map(d => {
+    const t = totalDia(p, d), l = itemsDia(p, d);
+    const pk = Math.min(100, t.kcal / (+o.kcal || 1) * 100);
+    const pp = Math.min(100, t.prot / (+o.proteina || 1) * 100);
+    return `<div class="dcard">
+      <div class="dhead">
+        <span class="dtit">Día ${d}</span>
+        <span class="dmac"><b>${Math.round(t.kcal)}</b> kcal · <b class="pr">${Math.round(t.prot)}</b> g</span>
+        ${d > 1 ? `<button class="dcopy" data-copiadia="${d}" title="Copiar el día ${d - 1}">⧉</button>` : ''}</div>
+      <div class="dbars">
+        <div class="track"><i style="width:${pk}%;background:${pk > 105 ? 'var(--dng)' : 'var(--comi)'}"></i></div>
+        <div class="track"><i style="width:${pp}%;background:var(--cash)"></i></div></div>
 
-  <div class="kpis">
-    <div class="kpi"><div class="k">Día ${diaEd}</div><div class="v">${Math.round(t.kcal)}</div>
-      <div class="s">objetivo ${Math.round(o.kcal)} kcal</div>
-      <div class="track" style="margin-top:6px"><i style="width:${pk}%;background:${pk > 105 ? 'var(--dng)' : 'var(--comi)'}"></i></div></div>
-    <div class="kpi"><div class="k">Proteína</div><div class="v" style="color:var(--cash)">${Math.round(t.prot)} g</div>
-      <div class="s">objetivo ${Math.round(o.proteina)} g</div>
-      <div class="track" style="margin-top:6px"><i style="width:${pp}%;background:var(--cash)"></i></div></div></div>
-
-  ${D.momentos.map(m => {
-    const li = l.filter(x => x.momento_id === m.id);
-    const tm = li.reduce((a, x) => { const mm = macrosItem(x); return { k: a.k + mm.kcal, p: a.p + mm.prot }; }, { k: 0, p: 0 });
-    return `<div class="msec">
-      <div class="mhead">
-        <span class="mnom">${esc(m.nombre)}</span>
-        ${li.length ? `<span class="t2 mono">${Math.round(tm.k)} kcal · ${Math.round(tm.p)} g</span>` : ''}
-        <button class="madd" data-piadd="${m.id}" aria-label="Añadir a ${esc(m.nombre)}">${sv('plus', 2.4)}</button></div>
-      ${li.length ? `<div class="mgrid">${li.map(x => miniTarjeta(x)).join('')}</div>`
-        : `<button class="mvacio" data-piadd="${m.id}">Nada aún · toca para añadir</button>`}</div>`;
+      ${D.momentos.map(m => {
+        const li = l.filter(x => x.momento_id === m.id);
+        return `<div class="mrow">
+          <span class="mlbl">${esc(m.nombre)}</span>
+          <div class="mitems">
+            ${li.map(x => { const mm = macrosItem(x);
+              return `<span class="pill" data-delpi="${x.id}" title="Quitar">
+                <span class="pnm">${esc(mm.nom)}</span>
+                <span class="pq">${fmtCant(+x.cantidad)}${mm.u === 'porciones' ? '' : mm.u}</span>
+                <span class="pk">${Math.round(mm.kcal)}</span></span>`; }).join('')}
+            <button class="pilladd" data-piadd2="${m.id}:${d}" aria-label="Añadir a ${esc(m.nombre)} del día ${d}">+</button>
+          </div></div>`;
+      }).join('')}
+    </div>`;
   }).join('')}
 
-  ${diaEd > 1 ? `<button class="btn btn-q" style="width:100%;margin-top:12px" data-act="copiar-dia">
-    Copiar todo el día ${diaEd - 1} aquí</button>` : ''}
-
-  <div class="fl" style="margin-top:12px">
+  <div class="fl" style="margin-top:14px">
     ${p.activo ? `<button class="btn btn-q" style="flex:1" data-act="plan-desactivar">Desactivar</button>`
       : `<button class="btn" style="flex:1;background:var(--comi);color:#05231A" data-act="plan-activar">Activar desde hoy</button>`}
     <button class="btn btn-q" data-act="ir-compra">Compra</button></div>`;
@@ -1995,15 +1992,16 @@ async function activarPlan(on) {
 }
 let piMom = null, piSel = null, piTab = 'rec';
 
-function formPlanItem(momId) {
-  piMom = momId; piSel = null; piTab = D.recetas.length ? 'rec' : 'ali';
+function formPlanItem(momId, d) {
+  piMom = momId; piSel = null; diaEd = d || diaEd;
+  piTab = D.recetas.length ? 'rec' : 'ali';
+  window._rep = window._rep || '1';
   const m = D.momentos.find(x => x.id === momId);
-  sheet(`Añadir a ${esc(m ? m.nombre : 'día ' + diaEd)}`, `<div id="pibox"></div>`);
+  sheet(`${esc(m ? m.nombre : '')} · día ${diaEd}`, `<div id="pibox"></div>`);
   pintaPicker();
 }
 function pintaPicker() {
   const box = $('pibox'); if (!box) return;
-  if (piSel) return pintaCantidad();
   const q = (window._pq || '').toLowerCase();
   const recs = D.recetas.filter(r => r.titulo.toLowerCase().includes(q));
   const alis = D.alimentos.filter(a => a.nombre.toLowerCase().includes(q));
@@ -2011,7 +2009,10 @@ function pintaPicker() {
   <div class="ptabs mb">
     <button class="ptab ${piTab === 'rec' ? 'on' : ''}" data-pitab="rec">Recetas</button>
     <button class="ptab ${piTab === 'ali' ? 'on' : ''}" data-pitab="ali">Alimentos</button></div>
-  <input id="piq" placeholder="Buscar…" value="${esc(window._pq || '')}" autocomplete="off" style="margin-bottom:10px">
+  <input id="piq" placeholder="Buscar…" value="${esc(window._pq || '')}" autocomplete="off" style="margin-bottom:8px">
+  <div class="seg mb" id="segRep">
+    <button data-rep="1" class="${window._rep !== 'all' ? 'on' : ''}">Solo el día ${diaEd}</button>
+    <button data-rep="all" class="${window._rep === 'all' ? 'on' : ''}">Todos los días</button></div>
   ${piTab === 'rec' ? (recs.length ? `<div class="rgrid">${recs.map(r => {
       const auto = macrosReceta(r), k = r.kcal || (auto && auto.kcal);
       return `<button class="rcard" data-pipick="r:${r.id}">
@@ -2031,46 +2032,27 @@ function pintaPicker() {
   if (inp) inp.oninput = () => { window._pq = inp.value; pintaPicker(); setTimeout(() => { const i = $('piq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 0); };
   pintarFotos();
 }
-function pintaCantidad() {
-  const box = $('pibox');
-  const o = piSel;
-  const def = o.t === 'r' ? 1 : (o.p || 100);
-  box.innerHTML = `
-  <button class="btn btn-q" style="margin-bottom:12px" data-act="pi-atras">‹ Cambiar</button>
-  <div class="card mb" style="padding:12px 13px">
-    <div class="t1">${esc(o.n)}</div>
-    <div class="t2">${o.t === 'r' ? 'receta' : 'por 100 ' + esc(o.u)}</div></div>
-  <div class="fg"><label>Cantidad ${o.t === 'r' ? '(porciones)' : '(' + esc(o.u) + ')'}</label>
-    <input id="pc" type="number" step="${o.t === 'r' ? '0.5' : '10'}" inputmode="decimal" class="mono" value="${def}"></div>
-  <div id="piprev" class="prevbox"></div>
-  <div class="fg" style="margin-top:10px"><label>Repetir</label><div class="seg" id="segRep">
-    <button data-rep="1" class="on">Solo el día ${diaEd}</button>
-    <button data-rep="all">Todos los días</button></div></div>
-  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:10px" data-act="pi-save">Añadir</button>`;
-  window._rep = '1';
-  $('pc').oninput = previewPI;
-  previewPI();
-  $('pc').select();
-}
-function previewPI() {
-  const o = piSel, c = parseFloat(val('pc')) || 0, box = $('piprev');
-  if (!box || !o) return;
-  let m;
-  if (o.t === 'a') { const al = D.alimentos.find(a => a.id === o.id); m = macros(al, c); }
-  else { const r = D.recetas.find(x => x.id === o.id), auto = macrosReceta(r);
-    const k = +r.kcal || (auto && auto.kcal) || 0, p = +r.proteina || (auto && auto.prot) || 0;
-    m = { kcal: k * c, prot: p * c }; }
-  box.innerHTML = `<div class="fl" style="justify-content:space-around">
-    <div style="text-align:center"><div class="t2">Calorías</div>
-      <div style="font-size:19px;font-weight:700;font-family:'DM Mono',monospace">${Math.round(m.kcal)}</div></div>
-    <div style="text-align:center"><div class="t2">Proteína</div>
-      <div style="font-size:19px;font-weight:700;font-family:'DM Mono',monospace;color:var(--cash)">${m.prot.toFixed(1)} g</div></div></div>`;
-}
-function elegirPI(tok) {
+/* Un toque = añadido. Se usa la ración habitual del alimento (o 1 porción
+   si es receta); la cantidad se ajusta después tocando la pastilla. */
+async function elegirPI(tok) {
   const [t, id] = tok.split(':');
-  if (t === 'r') { const r = D.recetas.find(x => x.id === +id); piSel = { t, id: +id, n: r.titulo, u: 'porciones' }; }
-  else { const a = D.alimentos.find(x => x.id === +id); piSel = { t, id: +id, n: a.nombre, u: a.unidad, p: a.porcion }; }
-  pintaCantidad();
+  let cant;
+  if (t === 'r') { const r = D.recetas.find(x => x.id === +id); piSel = { t, id: +id, n: r.titulo, u: 'porciones' }; cant = 1; }
+  else { const a = D.alimentos.find(x => x.id === +id); piSel = { t, id: +id, n: a.nombre, u: a.unidad, p: a.porcion };
+    cant = +a.porcion || 100; }
+  await guardarPI(cant);
+}
+async function guardarPI(cant) {
+  const p = D.planesComida.find(x => x.id === planEd);
+  const base = { plan_id: p.id, momento_id: piMom, cantidad: cant,
+                 alimento_id: piSel.t === 'a' ? piSel.id : null,
+                 receta_id: piSel.t === 'r' ? piSel.id : null };
+  const dd = window._rep === 'all' ? Array.from({ length: p.dias }, (_, i) => i + 1) : [diaEd];
+  try {
+    const nuevos = await api.addPlanItems(dd.map(d => ({ ...base, dia: d, orden: p.items.length })));
+    p.items.push(...nuevos);
+    close(); render();
+  } catch (e) { fallo(e); }
 }
 
 async function savePlanItem() {
@@ -2355,18 +2337,43 @@ function copiarCompra() {
     .then(() => toast('Lista copiada')).catch(() => toast('No se pudo copiar', null, true));
 }
 
+let ordAli = 'nombre', ascAli = true, qAli = '';
+
 function cAlim() {
-  const frec = D.alimentos.filter(a => a.frecuente), resto = D.alimentos.filter(a => !a.frecuente);
-  const fila = a => `<div class="row tap" data-alim="${a.id}">
-    <div class="grow"><div class="t1">${esc(a.nombre)}</div>
-      <div class="t2">por 100 ${esc(a.unidad)}${a.porcion ? ' · ración ' + fmtCant(+a.porcion) + ' ' + esc(a.unidad) : ''}</div></div>
-    <div style="text-align:right"><div class="amt">${Math.round(a.kcal)}</div>
-      <div class="t2 mono" style="color:var(--cash)">${(+a.proteina).toFixed(1)} g</div></div></div>`;
-  return `<button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-bottom:12px" data-act="alim-nuevo">
-    + Nuevo alimento</button>
-  ${frec.length ? `<div class="lbl">Frecuentes</div><div class="card mb">${frec.map(fila).join('')}</div>` : ''}
-  ${resto.length ? `<div class="lbl">Otros</div><div class="card mb">${resto.map(fila).join('')}</div>` : ''}
-  ${!D.alimentos.length ? '<div class="empty">Sin alimentos todavía.</div>' : ''}`;
+  let l = D.alimentos.filter(a => a.nombre.toLowerCase().includes(qAli.toLowerCase()));
+  l.sort((a, b) => {
+    let v;
+    if (ordAli === 'nombre') v = a.nombre.localeCompare(b.nombre, 'es');
+    else v = (+a[ordAli] || 0) - (+b[ordAli] || 0);
+    return ascAli ? v : -v;
+  });
+  const col = (k, t, w) => `<button class="th ${ordAli === k ? 'on' : ''}" data-ord="${k}" style="${w}">
+    ${t}${ordAli === k ? (ascAli ? ' ▲' : ' ▼') : ''}</button>`;
+
+  return `<div class="fl mb">
+    <input id="qali" placeholder="Buscar alimento…" value="${esc(qAli)}" autocomplete="off" style="flex:1">
+    <button class="btn" style="background:var(--comi);color:#05231A" data-act="alim-nuevo">+</button></div>
+
+  <div class="tbl">
+    <div class="trow thead">
+      ${col('nombre', 'Alimento', 'flex:1;text-align:left')}
+      ${col('kcal', 'kcal', 'width:52px')}
+      ${col('proteina', 'prot', 'width:46px')}
+      ${col('precio', '€', 'width:52px')}
+      <span style="width:30px"></span></div>
+
+    ${l.length ? l.map(a => `<div class="trow">
+      <div class="tc grow" style="text-align:left;min-width:0">
+        <div class="tnm">${esc(a.nombre)}</div>
+        <div class="tsub">por 100 ${esc(a.unidad)}${a.porcion ? ' · ración ' + fmtCant(+a.porcion) : ''}</div></div>
+      <div class="tc mono" style="width:52px">${Math.round(a.kcal) || '—'}</div>
+      <div class="tc mono" style="width:46px;color:var(--cash)">${+a.proteina ? (+a.proteina).toFixed(1) : '—'}</div>
+      <div class="tc mono" style="width:52px;font-size:10.5px;color:${a.precio ? 'var(--comi)' : 'var(--tx3)'}">
+        ${a.precio ? (+a.precio).toFixed(2) : '—'}</div>
+      <button class="tedit" data-alim="${a.id}" aria-label="Editar ${esc(a.nombre)}">✎</button></div>`).join('')
+      : '<div class="empty">Sin resultados.</div>'}</div>
+
+  <div class="t2" style="margin-top:10px;text-align:center">${D.alimentos.length} alimentos · el precio es el de tu última compra</div>`;
 }
 
 /* ── registrar una comida ── */
@@ -2641,7 +2648,7 @@ document.addEventListener('click', async ev => {
   if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
   if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
 
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom],[data-piadd2],[data-copiadia],[data-ord]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -2694,6 +2701,10 @@ document.addEventListener('click', async ev => {
   if (d.pipick) return elegirPI(d.pipick);
   if (d.ipick) return elegirIng(+d.ipick);
   if (d.comermom) return formComer(null, +d.comermom);
+  if (d.piadd2) { const [m, d2] = d.piadd2.split(':'); window._pq = ''; return formPlanItem(+m, +d2); }
+  if (d.copiadia) { diaEd = +d.copiadia; return copiarDia(); }
+  if (d.ord) { if (ordAli === d.ord) ascAli = !ascAli; else { ordAli = d.ord; ascAli = d.ord === 'nombre'; }
+    return render(); }
   if (d.pd) { window._pd = +d.pd;
     $('segPD').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.pd === window._pd)); return; }
   if (d.rep) { window._rep = d.rep;
@@ -2816,6 +2827,8 @@ document.addEventListener('click', async ev => {
 });
 document.addEventListener('input', ev => {
   const t = ev.target;
+  if (t.id === 'qali') { qAli = t.value; const p = t.selectionStart; render();
+    const n = $('qali'); if (n) { n.focus(); n.setSelectionRange(p, p); } return; }
   if (t.dataset && t.dataset.pre) { precioItem(+t.dataset.pre, t.value); return; }
   if (t.dataset && t.dataset.ig !== undefined) {
     window._ings[+t.dataset.ig][t.dataset.k] = t.value;

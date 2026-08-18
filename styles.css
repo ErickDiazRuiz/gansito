@@ -285,6 +285,50 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .iunit{font-size:11px;color:var(--tx3);font-family:'DM Mono',monospace;width:26px;flex:none}
 .inm{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+/* ── plan: todos los días de un vistazo ── */
+.dcard{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);
+  padding:11px 12px;margin-bottom:8px}
+.dhead{display:flex;align-items:baseline;gap:9px;margin-bottom:7px}
+.dtit{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--tx2)}
+.dmac{flex:1;font-size:10.5px;color:var(--tx3);font-family:'DM Mono',monospace;text-align:right}
+.dmac b{color:var(--tx);font-weight:500}
+.dmac b.pr{color:var(--cash)}
+.dcopy{width:22px;height:22px;flex:none;border-radius:6px;color:var(--tx3);font-size:12px}
+.dcopy:hover{background:var(--sur2);color:var(--tx)}
+.dbars{display:flex;gap:4px;margin-bottom:9px}
+.dbars .track{flex:1;height:3px}
+
+.mrow{display:flex;gap:8px;align-items:flex-start;padding:5px 0}
+.mrow+.mrow{border-top:1px solid var(--bdr)}
+.mlbl{width:74px;flex:none;font-size:10px;color:var(--tx3);padding-top:5px;
+  text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.mitems{flex:1;display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:20px;
+  background:var(--sur2);border:1px solid var(--bdr);cursor:pointer;max-width:100%;
+  transition:border-color .15s,background .15s}
+.pill:hover{border-color:var(--dng);background:var(--dng-bg)}
+.pnm{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
+.pq{font-size:9.5px;color:var(--tx3);font-family:'DM Mono',monospace}
+.pk{font-size:9.5px;color:var(--comi);font-family:'DM Mono',monospace}
+.pilladd{width:24px;height:24px;flex:none;border-radius:20px;border:1px dashed var(--bdr2);
+  color:var(--tx3);font-size:13px;line-height:1;display:grid;place-items:center}
+.pilladd:hover{border-color:var(--comi);color:var(--comi);border-style:solid}
+
+/* ── alimentos: tabla ── */
+.tbl{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden}
+.trow{display:flex;align-items:center;gap:6px;padding:8px 11px}
+.trow+.trow{border-top:1px solid var(--bdr)}
+.thead{background:var(--sur2);padding:6px 11px}
+.th{font-size:9px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--tx3);
+  text-align:right;padding:2px 0}
+.th:hover{color:var(--tx2)}
+.th.on{color:var(--comi)}
+.tc{font-size:12px;text-align:right;flex:none}
+.tnm{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tsub{font-size:9.5px;color:var(--tx3);margin-top:1px}
+.tedit{width:30px;height:28px;flex:none;border-radius:6px;color:var(--tx3);font-size:12px}
+.tedit:hover{background:var(--sur2);color:var(--comi)}
+
 /* sheet */
 .ov{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center}
 .sheet{width:100%;max-width:620px;background:var(--sur);border:1px solid var(--bdr2);
