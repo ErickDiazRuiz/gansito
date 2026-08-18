@@ -1365,7 +1365,8 @@ function tarjetaReceta(r) {
     <div class="rinfo">
       <div class="rtit">${esc(r.titulo)}</div>
       <div class="rmeta">${r.porciones} ${esc(r.unidad_rinde)}${r.tiempo_min ? ' · ' + r.tiempo_min + ' min' : ''}</div>
-      ${r.kcal ? `<div class="rmac"><span>${Math.round(r.kcal)} kcal</span><span class="pr">${(+r.proteina || 0).toFixed(0)} g</span></div>` : ''}</div>
+      ${(() => { const M = macrosDe(r); return M
+        ? `<div class="rmac"><span>${Math.round(M.kcal)} kcal</span><span class="pr">${M.prot.toFixed(0)} g</span></div>` : ''; })()}</div>
   </button>`;
 }
 
@@ -1411,28 +1412,19 @@ function vReceta() {
   ${r.notas ? `<div class="lbl">Notas</div>
   <div class="card mb" style="padding:13px"><div class="t2" style="line-height:1.6">${esc(r.notas)}</div></div>` : ''}
 
-  ${(() => { const auto = macrosReceta(r);
-    return auto && !r.kcal ? `<div class="card mb" style="padding:11px 13px;border-color:var(--comi)">
-      <div class="lbl" style="color:var(--comi)">Calculado de los ingredientes</div>
-      <div class="fl" style="justify-content:space-around;margin:8px 0">
-        <div style="text-align:center"><div class="t2">Por porción</div>
-          <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace">${Math.round(auto.kcal)} kcal</div></div>
-        <div style="text-align:center"><div class="t2">Proteína</div>
-          <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--cash)">${auto.prot.toFixed(1)} g</div></div></div>
-      ${auto.sin ? `<div class="t2">${auto.sin} ingrediente${auto.sin > 1 ? 's' : ''} sin vincular al catálogo, no cuenta${auto.sin > 1 ? 'n' : ''}.</div>` : ''}
-      <button class="btn btn-q" style="width:100%;margin-top:8px" data-act="fijar-macros">Usar estos valores</button></div>` : ''; })()}
-
-  ${r.kcal ? `<div class="card mb" style="padding:11px 13px">
+  ${(() => { const M = macrosDe(r), por = +r.porciones || 1;
+    return M ? `<div class="card mb" style="padding:11px 13px">
     <div class="fl" style="justify-content:space-around;margin-bottom:10px">
       <div style="text-align:center"><div class="t2">Receta entera</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace">${Math.round(+r.kcal * (+r.porciones || 1))} kcal</div>
-        <div class="t2 mono" style="color:var(--cash)">${((+r.proteina || 0) * (+r.porciones || 1)).toFixed(1)} g</div></div>
+        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace">${Math.round(M.kcal * por)} kcal</div>
+        <div class="t2 mono" style="color:var(--cash)">${(M.prot * por).toFixed(1)} g</div></div>
       <div style="text-align:center"><div class="t2">Por porción</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--comi)">${Math.round(r.kcal)} kcal</div>
-        <div class="t2 mono" style="color:var(--cash)">${(+r.proteina || 0).toFixed(1)} g</div></div></div>
+        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--comi)">${Math.round(M.kcal)} kcal</div>
+        <div class="t2 mono" style="color:var(--cash)">${M.prot.toFixed(1)} g</div></div></div>
+    ${M.sin ? `<div class="t2" style="margin-bottom:8px">${M.sin} ingrediente${M.sin > 1 ? 's' : ''} sin vincular al catálogo, no cuenta${M.sin > 1 ? 'n' : ''}.</div>` : ''}
     <button class="btn" style="width:100%;background:var(--comi);color:#05231A" data-act="comer-receta">
       Lo comí · añadir a hoy</button></div>`
-   : `<div class="card mb" style="padding:11px 13px"><div class="t2">Añade calorías y proteína por porción al editar la receta y podrás registrarla en Comidita.</div></div>`}
+   : `<div class="card mb" style="padding:11px 13px"><div class="t2">Vincula los ingredientes al catálogo para que se calculen los macros.</div></div>`; })()}
 
   <div class="fl"><button class="btn btn-q" style="flex:1" data-receta-edit="${r.id}">Editar</button>
     <button class="btn btn-d" data-del="receta" data-id="${r.id}">Eliminar</button></div></div>`;
@@ -1451,30 +1443,34 @@ function macrosReceta(r) {
   let k = 0, p = 0, con = 0, sin = 0;
   (r.ings || []).forEach(i => {
     const al = i.alimento_id && D.alimentos.find(a => a.id === i.alimento_id);
-    if (al && i.cantidad != null) { const m = macros(al, +i.cantidad); k += m.kcal; p += m.prot; con++; }
+    const g = i.cantidad != null ? +i.cantidad : (i.cant_med != null ? aGramos(i.cant_med, i.medida_id) : 0);
+    if (al && g) { const m = macros(al, g); k += m.kcal; p += m.prot; con++; }
     else sin++;
   });
   if (!con) return null;
   const por = +r.porciones || 1;
   return { kcal: k / por, prot: p / por, con, sin };
 }
-
-async function fijarMacros() {
-  const r = rec(), m = macrosReceta(r);
-  if (!m) return;
-  try {
-    const u = await api.editReceta(r.id, { kcal: +m.kcal.toFixed(2), proteina: +m.prot.toFixed(2) });
-    Object.assign(r, u); toast('Macros guardados'); render();
-  } catch (e) { fallo(e); }
+/* Los macros mostrados salen SIEMPRE de los ingredientes cuando los hay.
+   Lo guardado en la fila solo se usa si la receta no tiene ingredientes
+   vinculados: así el número nunca queda desfasado respecto a lo que ves. */
+function macrosDe(r) {
+  const auto = macrosReceta(r);
+  if (auto) return { kcal: auto.kcal, prot: auto.prot, auto: true, sin: auto.sin };
+  if (r.kcal) return { kcal: +r.kcal, prot: +r.proteina || 0, auto: false, sin: 0 };
+  return null;
 }
+
 
 async function comerReceta() {
   const r = rec();
   const mom = D.momentos[0];
+  const M = macrosDe(r);
+  if (!M) return toast('La receta no tiene macros', null, true);
   try {
     const n = await api.addRegistro2({ fecha: hoy(), momento_id: mom ? mom.id : null,
       receta_id: r.id, etiqueta: r.titulo, cantidad: 1,
-      kcal: +(+r.kcal).toFixed(2), proteina: +(+r.proteina || 0).toFixed(2) });
+      kcal: +M.kcal.toFixed(2), proteina: +M.prot.toFixed(2) });
     D.registro.unshift(n);
     toast(`${r.titulo} añadido a hoy`, async () => {
       await api.delRegistro2(n.id); D.registro = D.registro.filter(x => x.id !== n.id);
@@ -1827,8 +1823,8 @@ function macrosItem(x) {
   const al = D.alimentos.find(a => a.id === x.alimento_id);
   if (al) return { ...macros(al, +x.cantidad), nom: al.nombre, u: al.unidad };
   const r = D.recetas.find(y => y.id === x.receta_id);
-  if (r) return { kcal: (+r.kcal || 0) * +x.cantidad, prot: (+r.proteina || 0) * +x.cantidad,
-                  nom: r.titulo, u: 'porciones' };
+  if (r) { const M = macrosDe(r) || { kcal: 0, prot: 0 };
+    return { kcal: M.kcal * +x.cantidad, prot: M.prot * +x.cantidad, nom: r.titulo, u: 'porciones' }; }
   return { kcal: 0, prot: 0, nom: '—', u: '' };
 }
 const totalDia = (p, d) => itemsDia(p, d).reduce((a, x) => {
@@ -2080,12 +2076,12 @@ function pintaPicker() {
     <button data-rep="1" class="${window._rep !== 'all' ? 'on' : ''}">Solo el día ${diaEd}</button>
     <button data-rep="all" class="${window._rep === 'all' ? 'on' : ''}">Todos los días</button></div>
   ${piTab === 'rec' ? (recs.length ? `<div class="rgrid">${recs.map(r => {
-      const auto = macrosReceta(r), k = r.kcal || (auto && auto.kcal);
+      const M = macrosDe(r), k = M && M.kcal;
       return `<button class="rcard" data-pipick="r:${r.id}">
         <div class="rimg" ${r.imagen ? `data-foto="${esc(r.imagen)}"` : ''}>
           ${r.imagen ? '' : `<span class="rini">${esc(r.titulo.trim()[0] || '?').toUpperCase()}</span>`}</div>
         <div class="rinfo"><div class="rtit">${esc(r.titulo)}</div>
-          <div class="rmeta">${k ? Math.round(k) + ' kcal · ' + Math.round(r.proteina || (auto && auto.prot) || 0) + ' g' : 'sin macros'}</div></div></button>`;
+          <div class="rmeta">${k ? Math.round(k) + ' kcal · ' + Math.round(M.prot) + ' g' : 'sin macros'}</div></div></button>`;
     }).join('')}</div>` : '<div class="empty">Sin recetas. Créalas en Chefcito.</div>')
   : (alis.length ? `<div class="card">${alis.map(a => `<button class="row tap" style="width:100%;text-align:left" data-pipick="a:${a.id}">
       <div class="grow"><div class="t1">${esc(a.nombre)}</div>
@@ -2476,7 +2472,7 @@ async function borrarAliFila(id) {
 /* ── registrar una comida ── */
 function formComer(pre, momId) {
   const opciones = [...D.alimentos.map(a => ({ t: 'a', id: a.id, n: a.nombre, u: a.unidad })),
-                    ...D.recetas.filter(r => r.kcal).map(r => ({ t: 'r', id: r.id, n: r.titulo, u: 'porciones', p: 1 }))];
+                    ...D.recetas.filter(r => macrosDe(r)).map(r => ({ t: 'r', id: r.id, n: r.titulo, u: 'porciones', p: 1 }))];
   window._sel = pre || null;
   sheet('Registrar comida', `
   <div class="fg"><label>Momento</label><select id="cm">
@@ -2526,7 +2522,8 @@ function preview() {
   let m, g = 0;
   if (o.t === 'a') { const al = D.alimentos.find(a => a.id === o.id);
     g = c * medGr(window._med); m = macros(al, g); }
-  else { const r = D.recetas.find(x => x.id === o.id); m = { kcal: +r.kcal * c, prot: (+r.proteina || 0) * c }; }
+  else { const r = D.recetas.find(x => x.id === o.id), M = macrosDe(r) || { kcal: 0, prot: 0 };
+    m = { kcal: M.kcal * c, prot: M.prot * c }; }
   const al = o.t === 'a' && D.alimentos.find(a => a.id === o.id);
   box.innerHTML = `<div class="fl" style="justify-content:space-around">
     <div style="text-align:center"><div class="t2">Calorías</div>
@@ -2543,7 +2540,8 @@ async function guardarComida() {
     const g = c * medGr(window._med); m = macros(al, g);
     campos = { alimento_id: al.id, etiqueta: al.nombre,
                medida_id: window._med || null, cant_med: window._med ? c : null }; }
-  else { const r = D.recetas.find(x => x.id === o.id); m = { kcal: +r.kcal * c, prot: (+r.proteina || 0) * c };
+  else { const r = D.recetas.find(x => x.id === o.id), M = macrosDe(r) || { kcal: 0, prot: 0 };
+    m = { kcal: M.kcal * c, prot: M.prot * c };
     campos = { receta_id: r.id, etiqueta: r.titulo }; }
   try {
     const gr = o.t === 'a' ? c * medGr(window._med) : c;
@@ -2961,7 +2959,6 @@ document.addEventListener('click', async ev => {
     case 'compra-iniciar': return iniciarCompra();
     case 'compra-cerrar': return cerrarCompra();
     case 'compra-cancelar': return cancelarCompra();
-    case 'fijar-macros': return fijarMacros();
     case 'comer-receta': return comerReceta();
     case 'cat-add': return addCat();
     case 'push-on': return activarPush();
