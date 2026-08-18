@@ -6,6 +6,7 @@
   --plan:#8B7DDB;--plan-bg:#1A1630;
   --mm:#4A9FD8;--mm-bg:#0A2438;
   --chef:#E8825C;--chef-bg:#2E1109;
+  --comi:#5CCFA8;--comi-bg:#082B22;
   --dng:#E63946;--dng-bg:#2B0C0F;--r:12px;--rs:7px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -218,6 +219,14 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .ingrow input{padding:7px 9px}
 .ingdel{width:26px;height:30px;flex:none;color:var(--tx3);font-size:16px;line-height:1;border-radius:6px}
 .ingdel:hover{color:#E06A72;background:var(--sur2)}
+
+/* ── comidita ── */
+.sug{margin-top:5px;max-height:200px;overflow-y:auto}
+.sugit{display:flex;width:100%;align-items:center;gap:8px;padding:9px 11px;border-radius:var(--rs);
+  text-align:left;font-size:12.5px}
+.sugit:hover{background:var(--sur2)}
+.sugit+.sugit{border-top:1px solid var(--bdr)}
+.prevbox{background:var(--sur2);border-radius:9px;padding:12px;margin-top:9px}
 
 /* sheet */
 .ov{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center}

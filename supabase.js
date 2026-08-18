@@ -11,6 +11,7 @@ const task = () => sb.schema('taskito');     // procesos vivos (masa madre)
 const plan = () => sb.schema('plansito');
 const gnst = () => sb.schema('gansito');    // infraestructura (push)
 const chef = () => sb.schema('chefcito');   // recetario
+const comi = () => sb.schema('comidita');   // alimentos y registro diario
 
 /* ── auth ── */
 export const session = async () => (await sb.auth.getSession()).data.session;
@@ -37,7 +38,8 @@ async function all(q, cols, order) {
 export async function cargarTodo() {
   const [gastos, ingresos, fijos, items, presupuestos,
          aparatos, tareas, log, consumibles, videos, planes,
-         cultivos, registros, categorias, recetas, ingredientes] = await Promise.all([
+         cultivos, registros, categorias, recetas, ingredientes,
+         alimentos, momentos, registro, plan, objetivos] = await Promise.all([
     all(() => cash().from('gastos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('ingresos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('gastos_fijos'), '*', { col: 'dia_cobro' }),
@@ -53,7 +55,12 @@ export async function cargarTodo() {
     all(() => task().from('registros'), '*', { col: 'fecha', asc: false }),
     all(() => chef().from('categorias'), '*', { col: 'orden' }),
     all(() => chef().from('recetas'), '*', { col: 'titulo' }),
-    all(() => chef().from('ingredientes'), '*', { col: 'orden' })
+    all(() => chef().from('ingredientes'), '*', { col: 'orden' }),
+    all(() => comi().from('alimentos'), '*', { col: 'nombre' }),
+    all(() => comi().from('momentos'), '*', { col: 'orden' }),
+    all(() => comi().from('registro'), '*', { col: 'fecha', asc: false }),
+    all(() => comi().from('plan'), '*', { col: 'orden' }),
+    all(() => comi().from('objetivos'), '*')
   ]);
 
   // Ensamblar el árbol de Taskito
@@ -75,7 +82,8 @@ export async function cargarTodo() {
   recetas.forEach(r => { r.ings = ingredientes.filter(i => i.receta_id === r.id); });
 
   return { gastos, ingresos, fijos, items, presupuestos, aparatos, planes, cultivos,
-           categorias, recetas };
+           categorias, recetas, alimentos, momentos, registro, plan,
+           objetivo: objetivos[0] || { kcal: 2000, proteina: 120 } };
 }
 
 /* ── escritura ──
@@ -155,6 +163,24 @@ export async function urlFoto(path) {
 }
 export const borrarFoto = (path) => sb.storage.from('chefcito-fotos').remove([path]);
 
+/* ── comidita ── */
+export const addAlimento  = (a)     => one(comi().from('alimentos').insert(a));
+export const editAlimento = (id, a) => one(comi().from('alimentos').update(a).eq('id', id));
+export const delAlimento  = (id)    => comi().from('alimentos').delete().eq('id', id);
+
+export const addRegistro2 = (r)     => one(comi().from('registro').insert(r));
+export const delRegistro2 = (id)    => comi().from('registro').delete().eq('id', id);
+
+export const addMomento   = (m)     => one(comi().from('momentos').insert(m));
+export const delMomento   = (id)    => comi().from('momentos').delete().eq('id', id);
+
+export const setObjetivo  = (id, o) => id
+  ? one(comi().from('objetivos').update(o).eq('id', id))
+  : one(comi().from('objetivos').insert(o));
+
+export const addPlan2 = (p)  => one(comi().from('plan').insert(p));
+export const delPlan2 = (id) => comi().from('plan').delete().eq('id', id);
+
 /* ── videos ── */
 export async function subirVideo(tarea_id, titulo, file) {
   const path = `${tarea_id}/${Date.now()}_${file.name.replace(/[^\w.\-]/g, '_')}`;
@@ -185,5 +211,6 @@ export function escuchar(onChange) {
     .on('postgres_changes', { event: '*', schema: 'taskito' },   onChange)
     .on('postgres_changes', { event: '*', schema: 'plansito' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'chefcito' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'comidita' }, onChange)
     .subscribe();
 }

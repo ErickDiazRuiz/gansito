@@ -19,6 +19,7 @@ Navegador (GitHub Pages) ──supabase-js──► Supabase
 | Gansirato | Mantenimiento de aparatos | `gansirato` |
 | Taskito | Procesos vivos (masa madre) | `taskito` |
 | Chefcito | Recetario con fotos | `chefcito` |
+| Comidita | Alimentos, registro diario y lista de compra | `comidita` |
 | Plansito | Ideas y planes | `plansito` |
 
 ---
@@ -119,6 +120,10 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 
 **Tiempo real.** Cualquier escritura repinta todas las pestañas abiertas por websocket. Si más adelante conectas un ESP32 que escriba en Postgres, la web reacciona sola.
 
+**Comidita guarda los macros ya calculados en cada registro**, no una referencia al alimento. Si mañana corriges las calorías del pollo, tu historial de la semana pasada no cambia — refleja lo que sabías cuando lo comiste. Es la diferencia entre un registro y una consulta.
+
+**La lista de compra sale del plan**, no del historial: cantidad diaria de cada alimento × los días que elijas. Cambias de 4 a 7 días y las cantidades se ajustan solas.
+
 **Las cantidades de Chefcito se guardan separadas** (`200` · `g` · `pollo`) en vez de como texto, que es lo que permite escalar la receta a ½×, 2× o 3× sin volver a escribirla. El redondeo se ajusta a la magnitud: por debajo de 10 va a cuartos, por encima de 100 a enteros, porque «133,33 g de harina» no lo pesa nadie.
 
 **Las harinas siguen la nomenclatura alemana.** El número Type mide cenizas (minerales) en mg por 100 g, no proteína: cuanto más alto, más salvado, más microbiota nativa y más actividad. Por eso se arranca con integral o centeno y se mantiene con Type 550. Cada opción del desplegable trae su nota y una etiqueta de si es recomendable — la Type 405 aparece marcada como no recomendada porque está demasiado refinada para sostener un cultivo.
@@ -143,6 +148,7 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 | `db4.sql` | Harina de arranque separada. Después de `db3.sql`. |
 | `db5.sql` | Suscripciones push y vista de pendientes. Después de `db4.sql`. |
 | `db6.sql` | Chefcito: recetas, categorías y fotos. Después de `db5.sql`. |
+| `db7.sql` | Comidita: alimentos, registro, plan y compra. Después de `db6.sql`. |
 | `sw.js` | Service Worker: recibe los push con la web cerrada. |
 | `cron/avisar.mjs` | Job diario que revisa vencimientos y envía los avisos. |
 | `.github/workflows/avisos.yml` | El cron de GitHub Actions. |
