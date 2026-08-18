@@ -338,6 +338,10 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .ted.tnom{flex:1;min-width:0;text-align:left;font-family:'DM Sans',sans-serif;font-weight:500;width:auto}
 .ted.tsel{font-size:10px;color:var(--tx3);padding:5px 2px;text-align:center;
   -webkit-appearance:none;appearance:none;font-family:'DM Mono',monospace}
+.tmed{width:56px;height:26px;flex:none;border-radius:6px;color:var(--tx3);font-size:10px;
+  font-family:'DM Mono',monospace}
+.tmed:hover{background:var(--sur2);color:var(--comi)}
+.tmed.on{color:var(--comi)}
 .tdel{width:26px;height:26px;flex:none;border-radius:6px;color:var(--tx3);font-size:15px;line-height:1}
 .tdel:hover{background:var(--dng-bg);color:#E06A72}
 

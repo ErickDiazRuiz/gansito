@@ -2425,6 +2425,7 @@ function cAlim() {
       ${col('kcal', 'kcal', 'width:58px')}
       ${col('proteina', 'prot g', 'width:54px')}
       <span class="th" style="width:46px">por</span>
+      <span class="th" style="width:56px">medidas</span>
       <span style="width:26px"></span></div>
 
     ${l.length ? l.map(a => `<div class="trow">
@@ -2435,11 +2436,14 @@ function cAlim() {
         <option value="g" ${a.unidad === 'g' ? 'selected' : ''}>100g</option>
         <option value="ml" ${a.unidad === 'ml' ? 'selected' : ''}>100ml</option>
         <option value="u" ${a.unidad === 'u' ? 'selected' : ''}>ud</option></select>
+      ${(() => { const n = D.medidas.filter(m => m.alimento_id === a.id).length;
+        return `<button class="tmed ${n ? 'on' : ''}" data-med="${a.id}" title="Medidas caseras">
+          ${n ? n + ' ⚖' : '⚖'}</button>`; })()}
       <button class="tdel" data-alidel="${a.id}" aria-label="Eliminar ${esc(a.nombre)}">×</button></div>`).join('')
       : '<div class="empty">Sin resultados.</div>'}</div>
 
   <div class="t2" style="margin-top:10px;text-align:center">
-    ${D.alimentos.length} alimentos · toca una celda para editarla</div>`;
+    ${D.alimentos.length} alimentos · toca una celda para editarla · ⚖ para medidas caseras</div>`;
 }
 
 /* Guarda con retardo para no escribir en cada tecla */
@@ -2587,6 +2591,19 @@ function formAlimento(id) {
     ${a ? `<button class="btn btn-d" data-del="alimento" data-id="${id}">Eliminar</button>` : ''}</div>`);
   if (a) pintaMedidas(a.id);
 }
+function formMedidas(alId) {
+  const a = D.alimentos.find(x => x.id === alId);
+  sheet(`Medidas · ${esc(a.nombre)}`, `
+  <div class="t2 mb">Equivalencias en ${a.unidad === 'u' ? 'unidades' : a.unidad} para escribir
+    «2 cucharadas» o «180 asado» en vez de pesar.</div>
+  <div id="medlist"></div>
+  <div class="fl" style="margin-top:8px">
+    <input id="mnom" placeholder="loncha, unidad, asado…" style="flex:1">
+    <input id="mgr" type="number" inputmode="decimal" class="mono" placeholder="${a.unidad || 'g'}" style="width:74px">
+    <button class="btn" style="background:var(--comi);color:#05231A" data-medadd="${alId}">+</button></div>`);
+  pintaMedidas(alId);
+}
+
 function pintaMedidas(alId) {
   const box = $('medlist'); if (!box) return;
   const propias = D.medidas.filter(m => m.alimento_id === alId);
@@ -2787,7 +2804,7 @@ document.addEventListener('click', async ev => {
   if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
   if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
 
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom],[data-piadd2],[data-copiadia],[data-ord],[data-alidel],[data-medadd],[data-meddel]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom],[data-piadd2],[data-copiadia],[data-ord],[data-alidel],[data-medadd],[data-meddel],[data-med]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -2845,6 +2862,7 @@ document.addEventListener('click', async ev => {
   if (d.ord) { if (ordAli === d.ord) ascAli = !ascAli; else { ordAli = d.ord; ascAli = d.ord === 'nombre'; }
     return render(); }
   if (d.alidel) return borrarAliFila(+d.alidel);
+  if (d.med) return formMedidas(+d.med);
   if (d.medadd) return addMedida(+d.medadd);
   if (d.meddel) return borrarMedida(+d.meddel);
   if (d.pd) { window._pd = +d.pd;
