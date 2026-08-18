@@ -1388,6 +1388,17 @@ function vReceta() {
   ${r.notas ? `<div class="lbl">Notas</div>
   <div class="card mb" style="padding:13px"><div class="t2" style="line-height:1.6">${esc(r.notas)}</div></div>` : ''}
 
+  ${(() => { const auto = macrosReceta(r);
+    return auto && !r.kcal ? `<div class="card mb" style="padding:11px 13px;border-color:var(--comi)">
+      <div class="lbl" style="color:var(--comi)">Calculado de los ingredientes</div>
+      <div class="fl" style="justify-content:space-around;margin:8px 0">
+        <div style="text-align:center"><div class="t2">Por porción</div>
+          <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace">${Math.round(auto.kcal)} kcal</div></div>
+        <div style="text-align:center"><div class="t2">Proteína</div>
+          <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--cash)">${auto.prot.toFixed(1)} g</div></div></div>
+      ${auto.sin ? `<div class="t2">${auto.sin} ingrediente${auto.sin > 1 ? 's' : ''} sin vincular al catálogo, no cuenta${auto.sin > 1 ? 'n' : ''}.</div>` : ''}
+      <button class="btn btn-q" style="width:100%;margin-top:8px" data-act="fijar-macros">Usar estos valores</button></div>` : ''; })()}
+
   ${r.kcal ? `<div class="card mb" style="padding:11px 13px">
     <div class="fl" style="justify-content:space-around;margin-bottom:10px">
       <div style="text-align:center"><div class="t2">Por porción</div>
@@ -1406,6 +1417,30 @@ function fmtCant(n) {
   if (n >= 100) return String(Math.round(n));
   if (n >= 10)  return String(Math.round(n * 2) / 2).replace('.5', ',5');
   return String(Math.round(n * 4) / 4).replace('.25', ',25').replace('.5', ',5').replace('.75', ',75');
+}
+
+/* Suma los macros de los ingredientes vinculados al catálogo.
+   Devuelve null si ninguno lo está: no tiene sentido dar un total
+   que ignora la mitad de la receta. */
+function macrosReceta(r) {
+  let k = 0, p = 0, con = 0, sin = 0;
+  (r.ings || []).forEach(i => {
+    const al = i.alimento_id && D.alimentos.find(a => a.id === i.alimento_id);
+    if (al && i.cantidad != null) { const m = macros(al, +i.cantidad); k += m.kcal; p += m.prot; con++; }
+    else sin++;
+  });
+  if (!con) return null;
+  const por = +r.porciones || 1;
+  return { kcal: k / por, prot: p / por, con, sin };
+}
+
+async function fijarMacros() {
+  const r = rec(), m = macrosReceta(r);
+  if (!m) return;
+  try {
+    const u = await api.editReceta(r.id, { kcal: +m.kcal.toFixed(2), proteina: +m.prot.toFixed(2) });
+    Object.assign(r, u); toast('Macros guardados'); render();
+  } catch (e) { fallo(e); }
 }
 
 async function comerReceta() {
@@ -1427,8 +1462,9 @@ const UNIDADES = ['g', 'kg', 'ml', 'l', 'u', 'cda', 'cdta', 'taza', 'pizca', 'di
 
 function formReceta(id) {
   const r = id ? D.recetas.find(x => x.id === id) : null;
-  window._ings = r ? r.ings.map(i => ({ cantidad: i.cantidad, unidad: i.unidad, nombre: i.nombre, nota: i.nota }))
-                   : [{ cantidad: null, unidad: '', nombre: '', nota: '' }];
+  window._ings = r ? r.ings.map(i => ({ cantidad: i.cantidad, unidad: i.unidad, nombre: i.nombre,
+                                        nota: i.nota, alimento_id: i.alimento_id }))
+                   : [{ cantidad: null, unidad: '', nombre: '', nota: '', alimento_id: null }];
   window._foto = r ? r.imagen : null;
   sheet(r ? 'Editar receta' : 'Nueva receta', `
   <div class="fg"><label>Foto</label>
@@ -1483,9 +1519,10 @@ function pintaIngs() {
   box.innerHTML = window._ings.map((x, i) => `<div class="ingrow" data-stop="1">
     <input class="mono" style="width:56px" inputmode="decimal" placeholder="200" value="${x.cantidad ?? ''}" data-ig="${i}" data-k="cantidad">
     <input style="width:64px" list="dlun" placeholder="g" value="${esc(x.unidad || '')}" data-ig="${i}" data-k="unidad">
-    <input style="flex:1;min-width:0" placeholder="pollo" value="${esc(x.nombre || '')}" data-ig="${i}" data-k="nombre">
+    <input style="flex:1;min-width:0" placeholder="pollo" list="dlal" value="${esc(x.nombre || '')}" data-ig="${i}" data-k="nombre">
     <button class="ingdel" data-ingdel="${i}" aria-label="Quitar">×</button></div>`).join('')
-    + `<datalist id="dlun">${UNIDADES.map(u => `<option value="${u}">`).join('')}</datalist>`;
+    + `<datalist id="dlun">${UNIDADES.map(u => `<option value="${u}">`).join('')}</datalist>`
+    + `<datalist id="dlal">${D.alimentos.map(a => `<option value="${esc(a.nombre)}">`).join('')}</datalist>`;
 }
 async function subirFotoReceta(ev) {
   const f = ev.target.files[0]; if (!f) return;
@@ -1518,9 +1555,14 @@ async function saveReceta(id) {
   };
   const ings = window._ings
     .filter(x => (x.nombre || '').trim())
-    .map(x => ({ cantidad: x.cantidad === '' || x.cantidad == null ? null : parseFloat(x.cantidad),
-                 unidad: (x.unidad || '').trim() || null,
-                 nombre: x.nombre.trim(), nota: (x.nota || '').trim() || null }));
+    .map(x => {
+      const nom = x.nombre.trim();
+      const al = D.alimentos.find(a => a.nombre.toLowerCase() === nom.toLowerCase());
+      return { cantidad: x.cantidad === '' || x.cantidad == null ? null : parseFloat(x.cantidad),
+               unidad: (x.unidad || '').trim() || null,
+               nombre: nom, nota: (x.nota || '').trim() || null,
+               alimento_id: al ? al.id : null };
+    });
   try {
     let r;
     if (id) { r = await api.editReceta(id, o); Object.assign(D.recetas.find(x => x.id === id), r); }
@@ -1697,28 +1739,190 @@ function cPlan() {
   <button class="btn btn-q" style="width:100%;margin-top:12px" data-act="plan-add">+ Añadir al plan</button>`;
 }
 
-/* La lista de compra sale del plan: cantidad diaria × días. */
+/* La compra sale del plan: alimentos sueltos + ingredientes de las recetas
+   planificadas, todo convertido a cantidad diaria × días. */
 let diasCompra = 4;
-function cCompra() {
+
+function necesidades() {
   const acc = {};
-  D.plan.forEach(x => {
-    const al = D.alimentos.find(a => a.id === x.alimento_id);
+  const add = (al, cant) => {
     if (!al) return;
-    acc[al.id] ??= { nombre: al.nombre, unidad: al.unidad, dia: 0 };
-    acc[al.id].dia += +x.cantidad;
+    acc[al.id] ??= { al, dia: 0 };
+    acc[al.id].dia += cant;
+  };
+  D.plan.forEach(x => {
+    if (x.alimento_id) add(D.alimentos.find(a => a.id === x.alimento_id), +x.cantidad);
+    const r = D.recetas.find(y => y.id === x.receta_id);
+    if (r) {
+      const por = +r.porciones || 1;
+      (r.ings || []).forEach(i => {
+        if (!i.alimento_id || i.cantidad == null) return;
+        add(D.alimentos.find(a => a.id === i.alimento_id), +i.cantidad / por * +x.cantidad);
+      });
+    }
   });
-  const lista = Object.values(acc).sort((a, b) => b.dia * diasCompra - a.dia * diasCompra);
-  return `<div class="t2 mb">Calculada del plan. Cambia los días y las cantidades se ajustan.</div>
+  return Object.values(acc).sort((a, b) => b.dia - a.dia);
+}
+/* Precio estimado: lo que pagaste la última vez, escalado a la cantidad. */
+function estimar(al, cant) {
+  if (!al.precio || !al.precio_cant) return null;
+  return +al.precio / +al.precio_cant * cant;
+}
+const fmtQty = (n, u) => (n >= 1000 && (u === 'g' || u === 'ml'))
+  ? (n / 1000).toFixed(2).replace('.', ',') + ' ' + (u === 'g' ? 'kg' : 'L')
+  : fmtCant(n) + ' ' + u;
+
+function cCompra() {
+  const abierta = D.compras.find(c => !c.cerrada);
+  if (abierta) return compraActiva(abierta);
+
+  const lista = necesidades();
+  const est = lista.reduce((a, x) => a + (estimar(x.al, x.dia * diasCompra) || 0), 0);
+  const sinPrecio = lista.filter(x => !x.al.precio).length;
+
+  return `<div class="t2 mb">Sale del plan: alimentos sueltos más los ingredientes de las recetas planificadas.</div>
   <div class="tabs mb">${[3, 4, 7, 14].map(n => `<button class="tab ${diasCompra === n ? 'on' : ''}" data-dc="${n}">${n} días</button>`).join('')}</div>
-  ${lista.length ? `<div class="card mb">${lista.map(x => {
-    const tot = x.dia * diasCompra;
-    const grande = tot >= 1000 && (x.unidad === 'g' || x.unidad === 'ml');
-    return `<div class="row"><div class="grow"><div class="t1">${esc(x.nombre)}</div>
-      <div class="t2">${fmtCant(x.dia)} ${esc(x.unidad)} al día</div></div>
-      <div class="amt" style="color:var(--comi)">${grande ? (tot / 1000).toFixed(2).replace('.', ',') + ' ' + (x.unidad === 'g' ? 'kg' : 'L') : fmtCant(tot) + ' ' + x.unidad}</div></div>`;
+  ${lista.length ? `
+  <div class="kpis">
+    <div class="kpi"><div class="k">Ítems</div><div class="v">${lista.length}</div>
+      <div class="s">${diasCompra} días de comida</div></div>
+    <div class="kpi"><div class="k">Estimado</div><div class="v" style="color:var(--comi)">${est ? eur(est) : '—'}</div>
+      <div class="s">${sinPrecio ? sinPrecio + ' sin precio aún' : 'según tus últimas compras'}</div></div></div>
+
+  <div class="card mb">${lista.map(x => {
+    const tot = x.dia * diasCompra, e = estimar(x.al, tot);
+    return `<div class="row"><div class="grow"><div class="t1">${esc(x.al.nombre)}</div>
+      <div class="t2">${fmtCant(x.dia)} ${esc(x.al.unidad)} al día</div></div>
+      <div style="text-align:right"><div class="amt" style="color:var(--comi)">${fmtQty(tot, x.al.unidad)}</div>
+        ${e ? `<div class="t2 mono">~${eur(e)}</div>` : ''}</div></div>`;
   }).join('')}</div>
-  <button class="btn btn-q" style="width:100%" data-act="copiar-compra">Copiar lista</button>`
-    : '<div class="empty">Define el plan primero.</div>'}`;
+
+  <div class="fl">
+    <button class="btn" style="flex:1;background:var(--comi);color:#05231A" data-act="compra-iniciar">Ir a comprar</button>
+    <button class="btn btn-q" data-act="copiar-compra">Copiar</button></div>`
+    : '<div class="empty">Define el plan primero.</div>'}
+
+  ${D.compras.filter(c => c.cerrada).length ? `<div class="lbl" style="margin-top:16px">Compras anteriores</div>
+  <div class="card">${D.compras.filter(c => c.cerrada).slice(0, 6).map(c => `<div class="row">
+    <div class="grow"><div class="t1">${fechaCorta(c.fecha)}</div>
+      <div class="t2">${c.dias} días · ${c.items.filter(i => i.comprado).length} de ${c.items.length} ítems</div></div>
+    <div class="amt">${c.total ? eur(c.total) : '—'}</div></div>`).join('')}</div>` : ''}`;
+}
+
+/* Modo tienda: vas marcando y poniendo precios. El hint es lo que pagaste
+   la vez pasada; si no escribes nada, se usa esa estimación. */
+function compraActiva(c) {
+  const marcados = c.items.filter(i => i.comprado);
+  const total = marcados.reduce((a, i) => a + (+i.precio || 0), 0);
+  const pend = c.items.length - marcados.length;
+  return `<div class="card mb" style="padding:12px 13px;border-color:var(--comi)">
+    <div class="fl" style="justify-content:space-between;align-items:baseline">
+      <div><div class="lbl" style="margin:0;color:var(--comi)">Comprando</div>
+        <div class="t2">${fechaCorta(c.fecha)} · ${c.dias} días</div></div>
+      <div style="text-align:right"><div style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace">${eur(total)}</div>
+        <div class="t2">${marcados.length} de ${c.items.length}</div></div></div>
+    <div class="track" style="margin-top:9px"><i style="width:${c.items.length ? marcados.length / c.items.length * 100 : 0}%;background:var(--comi)"></i></div></div>
+
+  <div class="card mb">${c.items.map(i => {
+    const al = D.alimentos.find(a => a.id === i.alimento_id);
+    const hint = al ? estimar(al, +i.cantidad) : null;
+    return `<div class="row${i.comprado ? ' comprado' : ''}">
+      <button class="chk ${i.comprado ? 'on' : ''}" data-chk="${i.id}" role="checkbox" aria-checked="${i.comprado}">
+        ${i.comprado ? `<span style="display:block;width:11px;height:11px">${sv('check', 3)}</span>` : ''}</button>
+      <div class="grow"><div class="t1">${esc(i.etiqueta)}</div>
+        <div class="t2">${fmtQty(+i.cantidad, i.unidad)}</div></div>
+      <div class="pbox"><span class="pcur">€</span>
+        <input class="pin mono" inputmode="decimal" data-pre="${i.id}"
+          value="${i.precio != null ? i.precio : ''}"
+          placeholder="${hint ? hint.toFixed(2) : '0.00'}"></div></div>`;
+  }).join('')}</div>
+
+  ${pend ? `<div class="t2 mb">${pend} sin marcar. Los que no marques no se incluyen en el gasto.</div>` : ''}
+
+  <div class="fl">
+    <button class="btn" style="flex:1;background:var(--cash);color:#04241A" data-act="compra-cerrar">
+      Guardar compra · ${eur(total)}</button>
+    <button class="btn btn-d" data-act="compra-cancelar">Cancelar</button></div>`;
+}
+
+async function iniciarCompra() {
+  const lista = necesidades();
+  if (!lista.length) return;
+  try {
+    const c = await api.addCompra({ dias: diasCompra });
+    const items = await api.addItems(c.id, lista.map(x => ({
+      alimento_id: x.al.id, etiqueta: x.al.nombre,
+      cantidad: +(x.dia * diasCompra).toFixed(2), unidad: x.al.unidad
+    })));
+    D.compras.unshift({ ...c, items });
+    toast('Lista preparada. Ve marcando lo que compres.');
+    render();
+  } catch (e) { fallo(e); }
+}
+async function marcarItem(id) {
+  const c = D.compras.find(x => !x.cerrada);
+  const i = c.items.find(y => y.id === id);
+  const al = D.alimentos.find(a => a.id === i.alimento_id);
+  const nuevo = !i.comprado;
+  // Al marcar, si no hay precio escrito, se rellena con la estimación
+  const pre = nuevo && i.precio == null && al ? estimar(al, +i.cantidad) : i.precio;
+  try {
+    const u = await api.editItem(id, { comprado: nuevo, precio: pre != null ? +(+pre).toFixed(2) : null });
+    Object.assign(i, u); render();
+  } catch (e) { fallo(e); }
+}
+async function precioItem(id, v) {
+  const c = D.compras.find(x => !x.cerrada);
+  const i = c.items.find(y => y.id === id);
+  const p = v === '' ? null : parseFloat(v.replace(',', '.'));
+  if (p != null && isNaN(p)) return;
+  i.precio = p;
+  clearTimeout(window._pt);
+  window._pt = setTimeout(async () => {
+    try { await api.editItem(id, { precio: p, comprado: p != null ? true : i.comprado });
+      if (p != null) i.comprado = true;
+      render(); } catch (e) { fallo(e); }
+  }, 700);
+}
+async function cerrarCompra() {
+  const c = D.compras.find(x => !x.cerrada);
+  const marcados = c.items.filter(i => i.comprado);
+  if (!marcados.length) return toast('No marcaste nada', null, true);
+  const total = marcados.reduce((a, i) => a + (+i.precio || 0), 0);
+  try {
+    // 1. El gasto va a Cashito
+    const g = await api.addGasto({
+      categoria: 'Comida', subcategoria: 'Supermercado', monto: +total.toFixed(2),
+      item_nombre: `Compra ${c.dias} días`, item_tipo: 'basico',
+      fecha: new Date().toISOString(), nota: `${marcados.length} ítems`
+    });
+    D.gastos.unshift(g); ordenarGastos();
+
+    // 2. Cada precio pagado actualiza el catálogo para la próxima vez
+    for (const i of marcados) {
+      if (i.precio == null || !i.alimento_id) continue;
+      const al = D.alimentos.find(a => a.id === i.alimento_id);
+      if (!al) continue;
+      const u = await api.editAlimento(al.id, {
+        precio: +i.precio, precio_cant: +i.cantidad, precio_fecha: hoy() });
+      Object.assign(al, u);
+    }
+
+    const u = await api.editCompra(c.id, { cerrada: true, total: +total.toFixed(2), gasto_id: g.id });
+    Object.assign(c, u);
+    toast(`Compra guardada · ${eur(total)} en Cashito`);
+    render();
+  } catch (e) { fallo(e); }
+}
+async function cancelarCompra() {
+  const c = D.compras.find(x => !x.cerrada);
+  try { await api.delCompra(c.id); D.compras = D.compras.filter(x => x.id !== c.id);
+    toast('Compra cancelada'); render(); } catch (e) { fallo(e); }
+}
+function copiarCompra() {
+  const txt = necesidades().map(x => `${x.al.nombre}: ${fmtQty(x.dia * diasCompra, x.al.unidad)}`).join('\n');
+  navigator.clipboard.writeText(`Compra ${diasCompra} días\n\n${txt}`)
+    .then(() => toast('Lista copiada')).catch(() => toast('No se pudo copiar', null, true));
 }
 
 function cAlim() {
@@ -1897,7 +2101,8 @@ function formPlanAdd() {
   <div class="fg"><label>Alimento</label><select id="pa">
     ${window._ops.map(o => `<option value="${o.t}:${o.id}">${esc(o.n)}</option>`).join('')}</select></div>
   <div class="fg"><label>Cantidad</label>
-    <input id="pc" type="number" inputmode="decimal" class="mono" value="100"></div>
+    <input id="pc" type="number" step="0.5" inputmode="decimal" class="mono" value="100">
+    <div class="t2" style="margin-top:4px">Gramos para alimentos, porciones para recetas.</div></div>
   <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:8px" data-act="plan-save">Añadir</button>`);
 }
 async function savePlanItem() {
@@ -1914,19 +2119,6 @@ async function borrarPlanItem(id) {
   try { await api.delPlan2(id); D.plan = D.plan.filter(x => x.id !== id); toast('Quitado del plan'); render(); }
   catch (e) { fallo(e); }
 }
-function copiarCompra() {
-  const acc = {};
-  D.plan.forEach(x => { const al = D.alimentos.find(a => a.id === x.alimento_id);
-    if (!al) return; acc[al.id] ??= { n: al.nombre, u: al.unidad, d: 0 }; acc[al.id].d += +x.cantidad; });
-  const txt = Object.values(acc).map(x => {
-    const tot = x.d * diasCompra;
-    const g = tot >= 1000 && (x.u === 'g' || x.u === 'ml');
-    return `${x.n}: ${g ? (tot / 1000).toFixed(2) + (x.u === 'g' ? ' kg' : ' L') : Math.round(tot) + ' ' + x.u}`;
-  }).join('\n');
-  navigator.clipboard.writeText(`Compra ${diasCompra} días\n\n${txt}`)
-    .then(() => toast('Lista copiada')).catch(() => toast('No se pudo copiar', null, true));
-}
-
 /* ── plansito ── */
 function vPlansito() {
   const l = filt === 'todos' ? D.planes : D.planes.filter(p => p.estado === filt);
@@ -2068,7 +2260,7 @@ document.addEventListener('click', async ev => {
   if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
   if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
 
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-recplan]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -2110,6 +2302,7 @@ document.addEventListener('click', async ev => {
   if (d.delreg) return borrarReg(+d.delreg);
   if (d.delplan) return borrarPlanItem(+d.delplan);
   if (d.pick) return elegirComida(d.pick);
+  if (d.chk) return marcarItem(+d.chk);
   if (d.fr) { window._fr = !window._fr; el.classList.toggle('on', window._fr); return; }
   if (d.ingdel) {
     window._ings.splice(+d.ingdel, 1);
@@ -2206,6 +2399,10 @@ document.addEventListener('click', async ev => {
     case 'plan-add': return formPlanAdd();
     case 'plan-save': return savePlanItem();
     case 'copiar-compra': return copiarCompra();
+    case 'compra-iniciar': return iniciarCompra();
+    case 'compra-cerrar': return cerrarCompra();
+    case 'compra-cancelar': return cancelarCompra();
+    case 'fijar-macros': return fijarMacros();
     case 'comer-receta': return comerReceta();
     case 'cat-add': return addCat();
     case 'push-on': return activarPush();
@@ -2215,6 +2412,7 @@ document.addEventListener('click', async ev => {
 });
 document.addEventListener('input', ev => {
   const t = ev.target;
+  if (t.dataset && t.dataset.pre) { precioItem(+t.dataset.pre, t.value); return; }
   if (t.dataset && t.dataset.ig !== undefined) {
     window._ings[+t.dataset.ig][t.dataset.k] = t.value;
   }

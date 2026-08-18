@@ -227,6 +227,17 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .sugit:hover{background:var(--sur2)}
 .sugit+.sugit{border-top:1px solid var(--bdr)}
 .prevbox{background:var(--sur2);border-radius:9px;padding:12px;margin-top:9px}
+.chk{width:22px;height:22px;flex:none;border-radius:6px;border:1px solid var(--bdr2);
+  display:grid;place-items:center;color:#05231A;transition:background .15s,border-color .15s}
+.chk:hover{border-color:var(--comi)}
+.chk.on{background:var(--comi);border-color:var(--comi)}
+.row.comprado .t1{color:var(--tx3);text-decoration:line-through}
+.pbox{display:flex;align-items:center;gap:3px;flex:none;background:var(--sur2);
+  border:1px solid var(--bdr);border-radius:var(--rs);padding:0 8px}
+.pbox:focus-within{border-color:var(--comi)}
+.pcur{font-size:11px;color:var(--tx3)}
+.pin{width:52px;border:none;background:none;padding:7px 0;text-align:right;font-size:12.5px}
+.pin:focus{outline:none}
 
 /* sheet */
 .ov{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center}

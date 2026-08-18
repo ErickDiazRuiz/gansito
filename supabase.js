@@ -39,7 +39,8 @@ export async function cargarTodo() {
   const [gastos, ingresos, fijos, items, presupuestos,
          aparatos, tareas, log, consumibles, videos, planes,
          cultivos, registros, categorias, recetas, ingredientes,
-         alimentos, momentos, registro, plan, objetivos] = await Promise.all([
+         alimentos, momentos, registro, planComidas, objetivos,
+         compras, compraItems] = await Promise.all([
     all(() => cash().from('gastos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('ingresos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('gastos_fijos'), '*', { col: 'dia_cobro' }),
@@ -60,7 +61,9 @@ export async function cargarTodo() {
     all(() => comi().from('momentos'), '*', { col: 'orden' }),
     all(() => comi().from('registro'), '*', { col: 'fecha', asc: false }),
     all(() => comi().from('plan'), '*', { col: 'orden' }),
-    all(() => comi().from('objetivos'), '*')
+    all(() => comi().from('objetivos'), '*'),
+    all(() => comi().from('compras'), '*', { col: 'fecha', asc: false }),
+    all(() => comi().from('compra_items'), '*', { col: 'orden' })
   ]);
 
   // Ensamblar el árbol de Taskito
@@ -82,8 +85,9 @@ export async function cargarTodo() {
   recetas.forEach(r => { r.ings = ingredientes.filter(i => i.receta_id === r.id); });
 
   return { gastos, ingresos, fijos, items, presupuestos, aparatos, planes, cultivos,
-           categorias, recetas, alimentos, momentos, registro, plan,
-           objetivo: objetivos[0] || { kcal: 2000, proteina: 120 } };
+           categorias, recetas, alimentos, momentos, registro, plan: planComidas,
+           objetivo: objetivos[0] || { kcal: 2000, proteina: 120 },
+           compras: compras.map(c => ({ ...c, items: compraItems.filter(i => i.compra_id === c.id) })) };
 }
 
 /* ── escritura ──
@@ -180,6 +184,17 @@ export const setObjetivo  = (id, o) => id
 
 export const addPlan2 = (p)  => one(comi().from('plan').insert(p));
 export const delPlan2 = (id) => comi().from('plan').delete().eq('id', id);
+
+/* ── compras ── */
+export const addCompra    = (c)     => one(comi().from('compras').insert(c));
+export const editCompra   = (id, c) => one(comi().from('compras').update(c).eq('id', id));
+export const delCompra    = (id)    => comi().from('compras').delete().eq('id', id);
+export const editItem     = (id, i) => one(comi().from('compra_items').update(i).eq('id', id));
+export async function addItems(compra_id, lista) {
+  const { data, error } = await comi().from('compra_items')
+    .insert(lista.map((x, i) => ({ ...x, compra_id, orden: i }))).select();
+  if (error) throw error; return data;
+}
 
 /* ── videos ── */
 export async function subirVideo(tarea_id, titulo, file) {

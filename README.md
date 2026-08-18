@@ -122,7 +122,11 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 
 **Comidita guarda los macros ya calculados en cada registro**, no una referencia al alimento. Si mañana corriges las calorías del pollo, tu historial de la semana pasada no cambia — refleja lo que sabías cuando lo comiste. Es la diferencia entre un registro y una consulta.
 
-**La lista de compra sale del plan**, no del historial: cantidad diaria de cada alimento × los días que elijas. Cambias de 4 a 7 días y las cantidades se ajustan solas.
+**El catálogo de alimentos es el eje de todo.** Los ingredientes de una receta se vinculan por nombre a un alimento del catálogo, y eso es lo que cierra el circuito: la receta calcula sus propios macros sumando ingredientes, el plan sabe qué comprar cuando le añades una receta, y la lista de compra estima el precio. Un ingrediente sin vincular sigue funcionando como texto, simplemente no aporta a esos cálculos.
+
+**La compra es una sesión, no una lista estática.** «Ir a comprar» congela las cantidades del plan en ítems marcables. Vas tachando en la tienda y escribiendo lo que pagaste; el hueco muestra como sugerencia lo que costó la vez pasada. Al cerrarla pasan dos cosas: se crea el gasto en Cashito con el total, y cada precio pagado actualiza el catálogo para que la próxima estimación sea mejor.
+
+**La lista sale del plan**, no del historial: cantidad diaria × los días que elijas.
 
 **Las cantidades de Chefcito se guardan separadas** (`200` · `g` · `pollo`) en vez de como texto, que es lo que permite escalar la receta a ½×, 2× o 3× sin volver a escribirla. El redondeo se ajusta a la magnitud: por debajo de 10 va a cuartos, por encima de 100 a enteros, porque «133,33 g de harina» no lo pesa nadie.
 
@@ -149,6 +153,7 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 | `db5.sql` | Suscripciones push y vista de pendientes. Después de `db4.sql`. |
 | `db6.sql` | Chefcito: recetas, categorías y fotos. Después de `db5.sql`. |
 | `db7.sql` | Comidita: alimentos, registro, plan y compra. Después de `db6.sql`. |
+| `db8.sql` | Ingredientes vinculados, precios y compras. Después de `db7.sql`. |
 | `sw.js` | Service Worker: recibe los push con la web cerrada. |
 | `cron/avisar.mjs` | Job diario que revisa vencimientos y envía los avisos. |
 | `.github/workflows/avisos.yml` | El cron de GitHub Actions. |
