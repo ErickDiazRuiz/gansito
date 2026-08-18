@@ -174,7 +174,7 @@ function drawer() {
     if (m.id === 'taskito') mt = D.cultivos.length + (D.cultivos.length === 1 ? ' cultivo' : ' cultivos');
     if (m.id === 'chefcito') mt = D.recetas.length + (D.recetas.length === 1 ? ' receta' : ' recetas');
     if (m.id === 'comidita') { const t = totalHoy(); mt = `<span class="mono">${Math.round(t.kcal)} kcal</span>`; }
-    if (m.id === 'plansito') mt = D.planes.filter(p => p.estado === 'curso').length + ' en curso';
+    if (m.id === 'plansito') mt = D.planesComida.filter(p => p.estado === 'curso').length + ' en curso';
     h += `<button class="nav ${cur === m.id ? 'sel' : ''}" data-go="${m.id}">
       <div class="ic" style="background:var(${m.bg});color:var(${m.ac})">${sv(m.ic)}</div>
       <div class="lb">${m.nm}</div><div class="mt">${mt}</div></button>`;
@@ -290,8 +290,8 @@ function vHome() {
 
   <button class="proj" data-go="plansito"><div class="ptop">
     <div class="pic" style="background:var(--plan-bg);color:var(--plan)">${sv('bulb')}</div>
-    <div class="grow"><div class="pnm">Plansito</div><div class="psb">${D.planes.length} planes</div></div>
-    <span class="chip" style="color:var(--tx3)">${D.planes.filter(p => p.estado === 'curso').length} en curso</span>
+    <div class="grow"><div class="pnm">Plansito</div><div class="psb">${D.planesComida.length} planes</div></div>
+    <span class="chip" style="color:var(--tx3)">${D.planesComida.filter(p => p.estado === 'curso').length} en curso</span>
     </div></button></div>`;
 }
 
@@ -1644,7 +1644,7 @@ let planEd = null;      // plan que se está editando
 let diaEd = 1;          // día visible dentro del editor
 let diasCompra = 4;
 
-const planActivo = () => D.planes.find(p => p.activo);
+const planActivo = () => D.planesComida.find(p => p.activo);
 /* Qué día del plan corresponde a una fecha dada */
 function diaDePlan(p, f) {
   if (!p || !p.inicio) return null;
@@ -1722,7 +1722,7 @@ function cHoy() {
 
 /* ── planes de N días ── */
 function cPlan() {
-  if (planEd) return editorPlan(D.planes.find(p => p.id === planEd));
+  if (planEd) return editorPlan(D.planesComida.find(p => p.id === planEd));
   const act = planActivo();
   return `${act ? `<div class="lbl">Plan activo</div>
   <div class="card mb" style="border-color:var(--comi)">${tarjetaPlan(act, true)}</div>` : ''}
@@ -1730,9 +1730,9 @@ function cPlan() {
   <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-bottom:12px" data-act="plan-nuevo">
     + Nuevo plan de comidas</button>
 
-  ${D.planes.filter(p => !p.activo).length ? `<div class="lbl">Guardados</div>
-  <div class="card">${D.planes.filter(p => !p.activo).map(p => tarjetaPlan(p, false)).join('')}</div>` : ''}
-  ${!D.planes.length ? '<div class="empty">Sin planes. Crea el primero.</div>' : ''}`;
+  ${D.planesComida.filter(p => !p.activo).length ? `<div class="lbl">Guardados</div>
+  <div class="card">${D.planesComida.filter(p => !p.activo).map(p => tarjetaPlan(p, false)).join('')}</div>` : ''}
+  ${!D.planesComida.length ? '<div class="empty">Sin planes. Crea el primero.</div>' : ''}`;
 }
 function tarjetaPlan(p, activo) {
   let k = 0;
@@ -1804,13 +1804,13 @@ async function nuevoPlan() {
 async function crearPlan() {
   try {
     const p = await api.addPlanC({ nombre: val('pn') || `Plan de ${window._pd} días`, dias: window._pd || 4 });
-    D.planes.unshift({ ...p, items: [] });
+    D.planesComida.unshift({ ...p, items: [] });
     planEd = p.id; diaEd = 1;
     toast('Plan creado'); close(); render();
   } catch (e) { fallo(e); }
 }
 function ajustesPlan() {
-  const p = D.planes.find(x => x.id === planEd);
+  const p = D.planesComida.find(x => x.id === planEd);
   sheet('Ajustes del plan', `
   <div class="fg"><label>Nombre</label><input id="pn2" value="${esc(p.nombre)}"></div>
   <div class="fg"><label>Duración</label><div class="seg" id="segPD">
@@ -1822,7 +1822,7 @@ function ajustesPlan() {
   window._pd = p.dias;
 }
 async function guardarPlan() {
-  const p = D.planes.find(x => x.id === planEd);
+  const p = D.planesComida.find(x => x.id === planEd);
   try {
     if (window._pd < p.dias) {
       for (const i of p.items.filter(x => x.dia > window._pd)) await api.delPlanItem(i.id);
@@ -1834,13 +1834,13 @@ async function guardarPlan() {
   } catch (e) { fallo(e); }
 }
 async function borrarPlan2() {
-  try { await api.delPlanC(planEd); D.planes = D.planes.filter(p => p.id !== planEd);
+  try { await api.delPlanC(planEd); D.planesComida = D.planesComida.filter(p => p.id !== planEd);
     planEd = null; toast('Plan eliminado'); close(); render(); } catch (e) { fallo(e); }
 }
 async function activarPlan(on) {
-  const p = D.planes.find(x => x.id === planEd);
+  const p = D.planesComida.find(x => x.id === planEd);
   try {
-    for (const o of D.planes.filter(x => x.activo && x.id !== p.id)) {
+    for (const o of D.planesComida.filter(x => x.activo && x.id !== p.id)) {
       const u = await api.editPlanC(o.id, { activo: false }); Object.assign(o, u);
     }
     const u = await api.editPlanC(p.id, on ? { activo: true, inicio: hoy() } : { activo: false });
@@ -1871,7 +1871,7 @@ function formPlanItem() {
   $('pa').dispatchEvent(new Event('change'));
 }
 async function savePlanItem() {
-  const p = D.planes.find(x => x.id === planEd);
+  const p = D.planesComida.find(x => x.id === planEd);
   const [t, id] = val('pa').split(':');
   const c = parseFloat(val('pc')); if (!c) return;
   const base = { plan_id: p.id, momento_id: +val('pm') || null, cantidad: c,
@@ -1884,12 +1884,12 @@ async function savePlanItem() {
   } catch (e) { fallo(e); }
 }
 async function borrarPlanItem(id) {
-  const p = D.planes.find(x => x.id === planEd);
+  const p = D.planesComida.find(x => x.id === planEd);
   try { await api.delPlanItem(id); p.items = p.items.filter(x => x.id !== id); render(); }
   catch (e) { fallo(e); }
 }
 async function copiarDia() {
-  const p = D.planes.find(x => x.id === planEd);
+  const p = D.planesComida.find(x => x.id === planEd);
   const src = itemsDia(p, diaEd - 1);
   if (!src.length) return toast('El día anterior está vacío', null, true);
   try {
@@ -1923,7 +1923,7 @@ async function cargarDiaPlan(nd) {
 
 /* ── compra: sale del plan completo ── */
 function necesidades(p) {
-  p = p || planActivo() || D.planes.find(x => x.id === planEd) || D.planes[0];
+  p = p || planActivo() || D.planesComida.find(x => x.id === planEd) || D.planesComida[0];
   const acc = {};
   if (!p) return [];
   const add = (al, cant) => { if (!al) return; acc[al.id] ??= { al, total: 0 }; acc[al.id].total += cant; };
@@ -1952,7 +1952,7 @@ function cCompra() {
   const abierta = D.compras.find(c => !c.cerrada);
   if (abierta) return compraActiva(abierta);
 
-  const p = planActivo() || D.planes[0];
+  const p = planActivo() || D.planesComida[0];
   if (!p) return '<div class="empty">Arma un plan primero. La compra sale de él.</div>';
 
   const lista = necesidades(p);
@@ -2032,7 +2032,7 @@ function compraActiva(c) {
 }
 
 async function iniciarCompra() {
-  const p = planActivo() || D.planes[0];
+  const p = planActivo() || D.planesComida[0];
   const lista = necesidades(p);
   if (!lista.length) return;
   try {
@@ -2102,7 +2102,7 @@ async function cancelarCompra() {
     toast('Compra cancelada'); render(); } catch (e) { fallo(e); }
 }
 function copiarCompra() {
-  const p = planActivo() || D.planes[0];
+  const p = planActivo() || D.planesComida[0];
   const txt = necesidades(p).map(x => `${x.al.nombre}: ${fmtQty(x.total, x.al.unidad)}`).join('\n');
   navigator.clipboard.writeText(`Compra · ${p.nombre} (${p.dias} días)\n\n${txt}`)
     .then(() => toast('Lista copiada')).catch(() => toast('No se pudo copiar', null, true));
@@ -2255,9 +2255,9 @@ async function saveObjetivo(id) {
 
 /* ── plansito ── */
 function vPlansito() {
-  const l = filt === 'todos' ? D.planes : D.planes.filter(p => p.estado === filt);
+  const l = filt === 'todos' ? D.planesComida : D.planesComida.filter(p => p.estado === filt);
   return `<div class="view">
-  <div class="hrow"><div class="h1">Plansito</div><span class="sub">${D.planes.length} planes</span></div>
+  <div class="hrow"><div class="h1">Plansito</div><span class="sub">${D.planesComida.length} planes</span></div>
   <div class="card mb" style="padding:12px 13px">
     <textarea id="pt" placeholder="Cambiar el grinder por uno de muelas cónicas…" style="min-height:64px;resize:vertical"></textarea>
     <div class="fl" style="margin-top:7px">
@@ -2280,13 +2280,13 @@ async function addPlan() {
   const ln = v.split('\n');
   try {
     const n = await api.addPlan({ titulo: ln[0].slice(0, 200), notas: ln.slice(1).join(' ').trim() || null, estado: $('pe').value });
-    D.planes.unshift(n);
-    toast('Apuntado', async () => { await api.delPlan(n.id); D.planes = D.planes.filter(x => x.id !== n.id); });
+    D.planesComida.unshift(n);
+    toast('Apuntado', async () => { await api.delPlan(n.id); D.planesComida = D.planesComida.filter(x => x.id !== n.id); });
     render();
   } catch (e) { fallo(e); }
 }
 function formPlan(id) {
-  const p = D.planes.find(x => x.id === id);
+  const p = D.planesComida.find(x => x.id === id);
   sheet('Editar plan', `
   <div class="fg"><label>Título</label><input id="qt" value="${esc(p.titulo)}"></div>
   <div class="fg"><label>Notas</label><textarea id="qn" style="min-height:70px">${esc(p.notas || '')}</textarea></div>
@@ -2307,12 +2307,12 @@ async function savePlan(id) {
     categoria: val('qc') || 'Sin categoría',
     coste_estimado: parseFloat(val('qe')) || null, estado: window._est
   };
-  try { const u = await api.editPlan(id, o); Object.assign(D.planes.find(x => x.id === id), u);
+  try { const u = await api.editPlan(id, o); Object.assign(D.planesComida.find(x => x.id === id), u);
     toast('Plan actualizado'); close(); render(); }
   catch (e) { fallo(e); }
 }
 async function borrarPlan(id) {
-  try { await api.delPlan(id); D.planes = D.planes.filter(x => x.id !== id); toast('Plan eliminado'); close(); render(); }
+  try { await api.delPlan(id); D.planesComida = D.planesComida.filter(x => x.id !== id); toast('Plan eliminado'); close(); render(); }
   catch (e) { fallo(e); }
 }
 
