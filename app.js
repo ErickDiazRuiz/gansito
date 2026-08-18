@@ -1434,9 +1434,9 @@ function formReceta(id) {
 function pintaIngs() {
   const box = $('inglist'); if (!box) return;
   box.innerHTML = window._ings.map((x, i) => `<div class="ingrow">
-    <input class="mono" style="width:56px" inputmode="decimal" placeholder="200" value="${x.cantidad ?? ''}" data-ing="${i}" data-k="cantidad">
-    <input style="width:64px" list="dlun" placeholder="g" value="${esc(x.unidad || '')}" data-ing="${i}" data-k="unidad">
-    <input style="flex:1;min-width:0" placeholder="pollo" value="${esc(x.nombre || '')}" data-ing="${i}" data-k="nombre">
+    <input class="mono" style="width:56px" inputmode="decimal" placeholder="200" value="${x.cantidad ?? ''}" data-ig="${i}" data-k="cantidad">
+    <input style="width:64px" list="dlun" placeholder="g" value="${esc(x.unidad || '')}" data-ig="${i}" data-k="unidad">
+    <input style="flex:1;min-width:0" placeholder="pollo" value="${esc(x.nombre || '')}" data-ig="${i}" data-k="nombre">
     <button class="ingdel" data-ingdel="${i}" aria-label="Quitar">×</button></div>`).join('')
     + `<datalist id="dlun">${UNIDADES.map(u => `<option value="${u}">`).join('')}</datalist>`;
 }
@@ -1792,8 +1792,8 @@ document.addEventListener('click', async ev => {
 });
 document.addEventListener('input', ev => {
   const t = ev.target;
-  if (t.dataset && t.dataset.ing !== undefined) {
-    window._ings[+t.dataset.ing][t.dataset.k] = t.value;
+  if (t.dataset && t.dataset.ig !== undefined) {
+    window._ings[+t.dataset.ig][t.dataset.k] = t.value;
   }
 });
 document.addEventListener('change', ev => {
