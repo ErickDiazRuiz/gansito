@@ -239,6 +239,52 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .pin{width:52px;border:none;background:none;padding:7px 0;text-align:right;font-size:12.5px}
 .pin:focus{outline:none}
 
+/* ── plan por días y momentos ── */
+.dtabs{display:flex;gap:4px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px}
+.dtab{flex:none;min-width:46px;padding:6px 4px;border-radius:9px;background:var(--sur2);
+  border:1px solid transparent;display:flex;flex-direction:column;align-items:center;gap:1px}
+.dtab.on{background:var(--comi-bg);border-color:var(--comi)}
+.dtab .dnum{font-size:13px;font-weight:600;color:var(--tx2)}
+.dtab.on .dnum{color:var(--comi)}
+.dtab .dkcal{font-size:9px;color:var(--tx3);font-family:'DM Mono',monospace}
+
+.msec{margin-top:14px}
+.mhead{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.mnom{flex:1;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--tx2)}
+.madd{width:24px;height:24px;flex:none;border-radius:7px;background:var(--sur2);display:grid;place-items:center;
+  color:var(--comi);transition:background .15s}
+.madd:hover{background:var(--comi-bg)}
+.madd svg{width:13px;height:13px}
+.mvacio{width:100%;padding:14px;border-radius:var(--r);border:1px dashed var(--bdr);
+  color:var(--tx3);font-size:11.5px;text-align:center}
+.mvacio:hover{border-color:var(--comi);color:var(--tx2)}
+
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (min-width:520px){.mgrid{grid-template-columns:1fr 1fr 1fr}}
+.mini-c{background:var(--sur);border:1px solid var(--bdr);border-radius:10px;overflow:hidden}
+.mini-img{position:relative;aspect-ratio:16/10;background:var(--sur3);background-size:cover;
+  background-position:center;display:grid;place-items:center}
+.mini-ini{font-size:20px;font-weight:700;color:var(--tx3);font-family:'DM Mono',monospace}
+.mini-x{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;
+  background:rgba(0,0,0,.65);color:var(--tx2);font-size:14px;line-height:1;display:grid;place-items:center}
+.mini-x:hover{background:var(--dng);color:#fff}
+.mini-b{padding:7px 9px 9px}
+.mini-t{font-size:11.5px;font-weight:600;line-height:1.25}
+.mini-q{font-size:10px;color:var(--tx3);margin-top:2px}
+.mini-m{display:flex;justify-content:space-between;margin-top:5px;font-size:10px;
+  font-family:'DM Mono',monospace;color:var(--tx2)}
+.mini-m .pr{color:var(--cash)}
+
+.rmac{display:flex;justify-content:space-between;margin-top:4px;font-size:10px;
+  font-family:'DM Mono',monospace;color:var(--tx2)}
+.rmac .pr{color:var(--cash)}
+
+.ingrow2{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--sur2);
+  border-radius:9px;margin-bottom:5px}
+.ingrow2 input{padding:6px 8px}
+.iunit{font-size:11px;color:var(--tx3);font-family:'DM Mono',monospace;width:26px;flex:none}
+.inm{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 /* sheet */
 .ov{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center}
 .sheet{width:100%;max-width:620px;background:var(--sur);border:1px solid var(--bdr2);

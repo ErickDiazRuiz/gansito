@@ -122,6 +122,8 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 
 **Comidita guarda los macros ya calculados en cada registro**, no una referencia al alimento. Si mañana corriges las calorías del pollo, tu historial de la semana pasada no cambia — refleja lo que sabías cuando lo comiste. Es la diferencia entre un registro y una consulta.
 
+**Los ingredientes se eligen del catálogo, no se escriben.** Al añadir uno abres un buscador sobre los alimentos que ya tienes; si no está, lo creas ahí mismo con sus kcal y proteína por 100 g y queda disponible para siempre. Eso garantiza que toda receta pueda calcular sus macros, y que la lista de compra sepa qué comprar. Los macros de la receta se recalculan en vivo mientras la editas — total y por porción — y solo hace falta escribirlos a mano si quieres sobrescribirlos.
+
 **El catálogo de alimentos es el eje de todo.** Los ingredientes de una receta se vinculan por nombre a un alimento del catálogo, y eso es lo que cierra el circuito: la receta calcula sus propios macros sumando ingredientes, el plan sabe qué comprar cuando le añades una receta, y la lista de compra estima el precio. Un ingrediente sin vincular sigue funcionando como texto, simplemente no aporta a esos cálculos.
 
 **El flujo es: plan → compra → registro.** Armas un plan de N días eligiendo recetas del recetario y alimentos sueltos para cada día. De ahí sale la lista de compra, que descompone cada receta en sus ingredientes y suma cantidades. Al activar el plan, «Hoy» sabe qué día toca y trae un botón para precargarlo; corriges lo que haga falta.

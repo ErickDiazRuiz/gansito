@@ -1346,7 +1346,8 @@ function tarjetaReceta(r) {
       ${r.favorita ? '<span class="rfav">★</span>' : ''}</div>
     <div class="rinfo">
       <div class="rtit">${esc(r.titulo)}</div>
-      <div class="rmeta">${r.porciones} ${esc(r.unidad_rinde)}${r.tiempo_min ? ' · ' + r.tiempo_min + ' min' : ''}</div></div>
+      <div class="rmeta">${r.porciones} ${esc(r.unidad_rinde)}${r.tiempo_min ? ' · ' + r.tiempo_min + ' min' : ''}</div>
+      ${r.kcal ? `<div class="rmac"><span>${Math.round(r.kcal)} kcal</span><span class="pr">${(+r.proteina || 0).toFixed(0)} g</span></div>` : ''}</div>
   </button>`;
 }
 
@@ -1401,10 +1402,12 @@ function vReceta() {
 
   ${r.kcal ? `<div class="card mb" style="padding:11px 13px">
     <div class="fl" style="justify-content:space-around;margin-bottom:10px">
+      <div style="text-align:center"><div class="t2">Receta entera</div>
+        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace">${Math.round(+r.kcal * (+r.porciones || 1))} kcal</div>
+        <div class="t2 mono" style="color:var(--cash)">${((+r.proteina || 0) * (+r.porciones || 1)).toFixed(1)} g</div></div>
       <div style="text-align:center"><div class="t2">Por porción</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace">${Math.round(r.kcal)} kcal</div></div>
-      <div style="text-align:center"><div class="t2">Proteína</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--cash)">${(+r.proteina || 0).toFixed(1)} g</div></div></div>
+        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--comi)">${Math.round(r.kcal)} kcal</div>
+        <div class="t2 mono" style="color:var(--cash)">${(+r.proteina || 0).toFixed(1)} g</div></div></div>
     <button class="btn" style="width:100%;background:var(--comi);color:#05231A" data-act="comer-receta">
       Lo comí · añadir a hoy</button></div>`
    : `<div class="card mb" style="padding:11px 13px"><div class="t2">Añade calorías y proteína por porción al editar la receta y podrás registrarla en Comidita.</div></div>`}
@@ -1464,7 +1467,7 @@ function formReceta(id) {
   const r = id ? D.recetas.find(x => x.id === id) : null;
   window._ings = r ? r.ings.map(i => ({ cantidad: i.cantidad, unidad: i.unidad, nombre: i.nombre,
                                         nota: i.nota, alimento_id: i.alimento_id }))
-                   : [{ cantidad: null, unidad: '', nombre: '', nota: '', alimento_id: null }];
+                   : [];
   window._foto = r ? r.imagen : null;
   sheet(r ? 'Editar receta' : 'Nueva receta', `
   <div class="fg"><label>Foto</label>
@@ -1490,15 +1493,21 @@ function formReceta(id) {
       <input id="ru" list="dlu" placeholder="porciones" value="${r ? esc(r.unidad_rinde) : 'porciones'}">
       <datalist id="dlu"><option value="porciones"><option value="días"><option value="raciones"><option value="vasos"><option value="unidades"></datalist></div></div>
 
-  <div class="fl">
-    <div class="fg grow"><label>Kcal por porción</label>
-      <input id="rk" type="number" step="1" inputmode="decimal" class="mono" placeholder="opcional" value="${r ? (r.kcal || '') : ''}"></div>
-    <div class="fg grow"><label>Proteína g</label>
-      <input id="rpr" type="number" step="0.1" inputmode="decimal" class="mono" placeholder="opcional" value="${r ? (r.proteina || '') : ''}"></div></div>
-
   <div class="fg"><label>Ingredientes</label>
     <div id="inglist"></div>
-    <button class="btn btn-q" style="width:100%;margin-top:6px" data-act="ing-add">+ Añadir ingrediente</button></div>
+    <button class="btn btn-q" style="width:100%;margin-top:6px" data-act="ing-add">+ Añadir del catálogo</button></div>
+
+  <div class="fg"><label>Macros calculados</label>
+    <div id="recmac" class="prevbox"></div>
+    <div class="t2" style="margin-top:5px">Salen de los ingredientes. Puedes sobrescribirlos abajo si lo prefieres.</div></div>
+
+  <details class="avz"><summary>Sobrescribir macros a mano</summary>
+    <div class="fl" style="margin-top:10px">
+      <div class="fg grow"><label>Kcal por porción</label>
+        <input id="rk" type="number" step="1" inputmode="decimal" placeholder="auto" class="mono" value="${r ? (r.kcal || '') : ''}"></div>
+      <div class="fg grow"><label>Proteína g</label>
+        <input id="rpr" type="number" step="0.1" inputmode="decimal" placeholder="auto" class="mono" value="${r ? (r.proteina || '') : ''}"></div></div>
+  </details>
 
   <div class="fg"><label>Preparación</label>
     <textarea id="rprep" style="min-height:130px;line-height:1.6" placeholder="1. Calienta la sartén…">${r ? esc(r.preparacion || '') : ''}</textarea></div>
@@ -1516,14 +1525,109 @@ function formReceta(id) {
 }
 function pintaIngs() {
   const box = $('inglist'); if (!box) return;
-  box.innerHTML = window._ings.map((x, i) => `<div class="ingrow" data-stop="1">
-    <input class="mono" style="width:56px" inputmode="decimal" placeholder="200" value="${x.cantidad ?? ''}" data-ig="${i}" data-k="cantidad">
-    <input style="width:64px" list="dlun" placeholder="g" value="${esc(x.unidad || '')}" data-ig="${i}" data-k="unidad">
-    <input style="flex:1;min-width:0" placeholder="pollo" list="dlal" value="${esc(x.nombre || '')}" data-ig="${i}" data-k="nombre">
-    <button class="ingdel" data-ingdel="${i}" aria-label="Quitar">×</button></div>`).join('')
-    + `<datalist id="dlun">${UNIDADES.map(u => `<option value="${u}">`).join('')}</datalist>`
-    + `<datalist id="dlal">${D.alimentos.map(a => `<option value="${esc(a.nombre)}">`).join('')}</datalist>`;
+  box.innerHTML = window._ings.map((x, i) => {
+    const al = x.alimento_id && D.alimentos.find(a => a.id === x.alimento_id);
+    const m = al && x.cantidad ? macros(al, +x.cantidad) : null;
+    return `<div class="ingrow2" data-stop="1">
+      <input class="mono" style="width:58px" inputmode="decimal" placeholder="200"
+        value="${x.cantidad ?? ''}" data-ig="${i}" data-k="cantidad">
+      <span class="iunit">${esc(al ? al.unidad : (x.unidad || 'g'))}</span>
+      <div class="grow" style="min-width:0">
+        <div class="inm">${esc(x.nombre || '—')}</div>
+        <div class="t2">${m ? Math.round(m.kcal) + ' kcal · ' + m.prot.toFixed(1) + ' g'
+          : al ? 'pon la cantidad' : 'sin vincular · no cuenta en los macros'}</div></div>
+      <button class="ingdel" data-ingdel="${i}" aria-label="Quitar">×</button></div>`;
+  }).join('');
+  actualizaMacrosForm();
 }
+/* El total de la receta se recalcula mientras la editas: así ves el efecto
+   de cada ingrediente sin tener que guardar. */
+function actualizaMacrosForm() {
+  const box = $('recmac'); if (!box) return;
+  const por = parseFloat(val('rp')) || 1;
+  let k = 0, p = 0, sin = 0;
+  window._ings.forEach(x => {
+    const al = x.alimento_id && D.alimentos.find(a => a.id === x.alimento_id);
+    if (al && x.cantidad) { const m = macros(al, +x.cantidad); k += m.kcal; p += m.prot; }
+    else if (x.nombre) sin++;
+  });
+  window._auto = { kcal: k / por, prot: p / por };
+  box.innerHTML = `<div class="fl" style="justify-content:space-around">
+    <div style="text-align:center"><div class="t2">Receta entera</div>
+      <div style="font-size:17px;font-weight:700;font-family:'DM Mono',monospace">${Math.round(k)} kcal</div>
+      <div class="t2 mono" style="color:var(--cash)">${p.toFixed(1)} g prot</div></div>
+    <div style="text-align:center"><div class="t2">Por porción (÷${fmtCant(por)})</div>
+      <div style="font-size:17px;font-weight:700;font-family:'DM Mono',monospace;color:var(--comi)">${Math.round(k / por)} kcal</div>
+      <div class="t2 mono" style="color:var(--cash)">${(p / por).toFixed(1)} g prot</div></div></div>
+    ${sin ? `<div class="t2" style="margin-top:8px;text-align:center">${sin} ingrediente${sin > 1 ? 's' : ''} sin vincular no cuenta${sin > 1 ? 'n' : ''}.</div>` : ''}`;
+}
+
+/* Elegir ingrediente: del catálogo, o crearlo con sus macros al vuelo. */
+let ingIdx = null;
+function pickIngrediente() {
+  ingIdx = window._ings.length;
+  window._ings.push({ cantidad: null, unidad: '', nombre: '', nota: '', alimento_id: null });
+  sheet('Añadir ingrediente', `<div id="ingbox"></div>`);
+  pintaPickIng();
+}
+function pintaPickIng() {
+  const box = $('ingbox'); if (!box) return;
+  const q = (window._iq || '').toLowerCase();
+  const l = D.alimentos.filter(a => a.nombre.toLowerCase().includes(q));
+  box.innerHTML = `
+  <input id="iq" placeholder="Buscar en el catálogo…" value="${esc(window._iq || '')}" autocomplete="off" style="margin-bottom:10px">
+  ${l.length ? `<div class="card mb">${l.slice(0, 30).map(a => `<button class="row tap" style="width:100%;text-align:left" data-ipick="${a.id}">
+    <div class="grow"><div class="t1">${esc(a.nombre)}</div><div class="t2">por 100 ${esc(a.unidad)}</div></div>
+    <div style="text-align:right"><div class="amt">${Math.round(a.kcal)}</div>
+      <div class="t2 mono" style="color:var(--cash)">${(+a.proteina).toFixed(1)} g</div></div></button>`).join('')}</div>`
+    : '<div class="empty">No está en el catálogo.</div>'}
+  <button class="btn" style="width:100%;background:var(--comi);color:#05231A" data-act="ing-crear">
+    + Crear "${esc(window._iq || 'nuevo alimento')}"</button>`;
+  const inp = $('iq');
+  if (inp) inp.oninput = () => { window._iq = inp.value; pintaPickIng();
+    setTimeout(() => { const i = $('iq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 0); };
+}
+function elegirIng(id) {
+  const a = D.alimentos.find(x => x.id === id);
+  const x = window._ings[ingIdx];
+  x.alimento_id = a.id; x.nombre = a.nombre; x.unidad = a.unidad;
+  x.cantidad = x.cantidad || a.porcion || 100;
+  window._iq = '';
+  close(); pintaIngs();
+}
+/* Crear alimento sin salir del flujo: se pide lo mínimo. */
+function crearAlimentoRapido(destino) {
+  window._destAli = destino;   // 'ing' | 'plan'
+  sheet('Nuevo alimento', `
+  <div class="fg"><label>Nombre</label><input id="qa" value="${esc(window._iq || window._pq || '')}"></div>
+  <div class="fl"><div class="fg" style="width:96px"><label>Unidad</label><select id="qu">
+      <option value="g">g</option><option value="ml">ml</option><option value="u">unidad</option></select></div>
+    <div class="fg grow"><label>Ración habitual</label>
+      <input id="qp" type="number" inputmode="decimal" class="mono" placeholder="100"></div></div>
+  <div class="t2 mb">Valores por 100 g o 100 ml. Míralos en el envase.</div>
+  <div class="fl"><div class="fg grow"><label>Calorías</label>
+      <input id="qk" type="number" step="0.1" inputmode="decimal" class="mono" placeholder="165"></div>
+    <div class="fg grow"><label>Proteína g</label>
+      <input id="qpr" type="number" step="0.1" inputmode="decimal" class="mono" placeholder="30"></div></div>
+  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:8px" data-act="ali-rapido-save">Crear y usar</button>`);
+  setTimeout(() => $('qa').focus(), 60);
+}
+async function guardarAlimentoRapido() {
+  const nombre = val('qa'); if (!nombre) return $('qa').focus();
+  try {
+    const a = await api.addAlimento({ nombre, unidad: val('qu'),
+      kcal: parseFloat(val('qk')) || 0, proteina: parseFloat(val('qpr')) || 0,
+      porcion: parseFloat(val('qp')) || null });
+    D.alimentos.push(a);
+    D.alimentos.sort((x, y) => x.nombre.localeCompare(y.nombre, 'es'));
+    close();
+    if (window._destAli === 'ing') elegirIng(a.id);
+    else { piSel = { t: 'a', id: a.id, n: a.nombre, u: a.unidad, p: a.porcion };
+      sheet('Añadir', `<div id="pibox"></div>`); pintaCantidad(); }
+    toast('Alimento creado');
+  } catch (e) { fallo(e); }
+}
+
 async function subirFotoReceta(ev) {
   const f = ev.target.files[0]; if (!f) return;
   if (f.size > 6e6) return toast('La foto pesa más de 6 MB', null, true);
@@ -1550,8 +1654,8 @@ async function saveReceta(id) {
     tiempo_min: parseInt(val('rmin'), 10) || null,
     preparacion: val('rprep') || null,
     notas: val('rnot') || null,
-    kcal: parseFloat(val('rk')) || null,
-    proteina: parseFloat(val('rpr')) || null
+    kcal: parseFloat(val('rk')) || (window._auto && window._auto.kcal ? +window._auto.kcal.toFixed(2) : null),
+    proteina: parseFloat(val('rpr')) || (window._auto && window._auto.prot ? +window._auto.prot.toFixed(2) : null)
   };
   const ings = window._ings
     .filter(x => (x.nombre || '').trim())
@@ -1749,47 +1853,66 @@ function tarjetaPlan(p, activo) {
 function editorPlan(p) {
   if (!p) { planEd = null; return cPlan(); }
   if (diaEd > p.dias) diaEd = 1;
-  const l = itemsDia(p, diaEd), t = totalDia(p, diaEd), o = D.objetivo;
-  const porMom = {};
-  l.forEach(x => { (porMom[x.momento_id ?? 0] ??= []).push(x); });
-  const moms = [...D.momentos.filter(m => porMom[m.id]), ...(porMom[0] ? [{ id: 0, nombre: 'Sin momento' }] : [])];
+  const t = totalDia(p, diaEd), o = D.objetivo;
+  const l = itemsDia(p, diaEd);
+  const pk = Math.min(100, t.kcal / (+o.kcal || 1) * 100);
+  const pp = Math.min(100, t.prot / (+o.proteina || 1) * 100);
 
   return `<div class="fl mb" style="align-items:center">
     <button class="btn btn-q" style="padding:5px 10px" data-act="plan-volver">‹</button>
     <div class="grow" style="text-align:center"><div class="t1">${esc(p.nombre)}</div>
-      <div class="t2">${p.dias} días</div></div>
+      <div class="t2">${p.dias} días${p.activo ? ' · activo' : ''}</div></div>
     <button class="btn btn-q" style="padding:5px 10px" data-act="plan-ajustes">···</button></div>
 
-  <div class="ptabs" style="overflow-x:auto">${Array.from({ length: p.dias }, (_, i) => i + 1).map(d =>
-    `<button class="ptab ${diaEd === d ? 'on' : ''}" data-diaed="${d}" style="flex:none;min-width:44px">${d}</button>`).join('')}</div>
+  <div class="dtabs">${Array.from({ length: p.dias }, (_, i) => i + 1).map(d => {
+    const td = totalDia(p, d), lleno = itemsDia(p, d).length;
+    return `<button class="dtab ${diaEd === d ? 'on' : ''}" data-diaed="${d}">
+      <span class="dnum">${d}</span>
+      <span class="dkcal">${lleno ? Math.round(td.kcal) : '·'}</span></button>`;
+  }).join('')}</div>
 
   <div class="kpis">
     <div class="kpi"><div class="k">Día ${diaEd}</div><div class="v">${Math.round(t.kcal)}</div>
       <div class="s">objetivo ${Math.round(o.kcal)} kcal</div>
-      <div class="track" style="margin-top:6px"><i style="width:${Math.min(100, t.kcal / (+o.kcal || 1) * 100)}%;background:var(--comi)"></i></div></div>
+      <div class="track" style="margin-top:6px"><i style="width:${pk}%;background:${pk > 105 ? 'var(--dng)' : 'var(--comi)'}"></i></div></div>
     <div class="kpi"><div class="k">Proteína</div><div class="v" style="color:var(--cash)">${Math.round(t.prot)} g</div>
       <div class="s">objetivo ${Math.round(o.proteina)} g</div>
-      <div class="track" style="margin-top:6px"><i style="width:${Math.min(100, t.prot / (+o.proteina || 1) * 100)}%;background:var(--cash)"></i></div></div></div>
+      <div class="track" style="margin-top:6px"><i style="width:${pp}%;background:var(--cash)"></i></div></div></div>
 
-  ${moms.map(m => {
-    const li = porMom[m.id];
-    return `<div class="lbl" style="margin-top:12px">${esc(m.nombre)}</div>
-    <div class="card">${li.map(x => { const mm = macrosItem(x);
-      return `<div class="row"><div class="grow"><div class="t1">${esc(mm.nom)}</div>
-        <div class="t2">${fmtCant(+x.cantidad)} ${esc(mm.u)}</div></div>
-        <div style="text-align:right"><div class="amt">${Math.round(mm.kcal)}</div>
-          <div class="t2 mono" style="color:var(--cash)">${mm.prot.toFixed(1)} g</div></div>
-        <button class="btn btn-q" style="padding:5px 8px" data-delpi="${x.id}" aria-label="Quitar">×</button></div>`;
-    }).join('')}</div>`;
-  }).join('') || '<div class="empty">Día vacío. Añade comidas abajo.</div>'}
+  ${D.momentos.map(m => {
+    const li = l.filter(x => x.momento_id === m.id);
+    const tm = li.reduce((a, x) => { const mm = macrosItem(x); return { k: a.k + mm.kcal, p: a.p + mm.prot }; }, { k: 0, p: 0 });
+    return `<div class="msec">
+      <div class="mhead">
+        <span class="mnom">${esc(m.nombre)}</span>
+        ${li.length ? `<span class="t2 mono">${Math.round(tm.k)} kcal · ${Math.round(tm.p)} g</span>` : ''}
+        <button class="madd" data-piadd="${m.id}" aria-label="Añadir a ${esc(m.nombre)}">${sv('plus', 2.4)}</button></div>
+      ${li.length ? `<div class="mgrid">${li.map(x => miniTarjeta(x)).join('')}</div>`
+        : `<button class="mvacio" data-piadd="${m.id}">Nada aún · toca para añadir</button>`}</div>`;
+  }).join('')}
 
-  <button class="btn btn-q" style="width:100%;margin-top:12px" data-act="pi-add">+ Añadir al día ${diaEd}</button>
-  ${diaEd > 1 ? `<button class="btn btn-q" style="width:100%;margin-top:6px" data-act="copiar-dia">Copiar el día ${diaEd - 1} aquí</button>` : ''}
+  ${diaEd > 1 ? `<button class="btn btn-q" style="width:100%;margin-top:12px" data-act="copiar-dia">
+    Copiar todo el día ${diaEd - 1} aquí</button>` : ''}
 
-  <div class="fl" style="margin-top:14px">
+  <div class="fl" style="margin-top:12px">
     ${p.activo ? `<button class="btn btn-q" style="flex:1" data-act="plan-desactivar">Desactivar</button>`
       : `<button class="btn" style="flex:1;background:var(--comi);color:#05231A" data-act="plan-activar">Activar desde hoy</button>`}
     <button class="btn btn-q" data-act="ir-compra">Compra</button></div>`;
+}
+
+/* Cada comida planificada se ve como tarjeta con su foto y sus macros,
+   no como una fila de texto. */
+function miniTarjeta(x) {
+  const m = macrosItem(x);
+  const r = D.recetas.find(y => y.id === x.receta_id);
+  return `<div class="mini-c">
+    <div class="mini-img" ${r && r.imagen ? `data-foto="${esc(r.imagen)}"` : ''}>
+      ${r && r.imagen ? '' : `<span class="mini-ini">${esc(m.nom.trim()[0] || '?').toUpperCase()}</span>`}
+      <button class="mini-x" data-delpi="${x.id}" aria-label="Quitar">×</button></div>
+    <div class="mini-b">
+      <div class="mini-t">${esc(m.nom)}</div>
+      <div class="mini-q">${fmtCant(+x.cantidad)} ${esc(m.u)}</div>
+      <div class="mini-m"><span>${Math.round(m.kcal)} kcal</span><span class="pr">${m.prot.toFixed(0)} g</span></div></div></div>`;
 }
 
 async function nuevoPlan() {
@@ -1849,33 +1972,93 @@ async function activarPlan(on) {
     render();
   } catch (e) { fallo(e); }
 }
-function formPlanItem() {
-  window._ops = [...D.recetas.map(r => ({ t: 'r', id: r.id, n: r.titulo, u: 'porciones', p: 1 })),
-                 ...D.alimentos.map(a => ({ t: 'a', id: a.id, n: a.nombre, u: a.unidad, p: a.porcion }))];
-  sheet(`Añadir al día ${diaEd}`, `
-  <div class="fg"><label>Momento</label><select id="pm">
-    ${D.momentos.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('')}</select></div>
-  <div class="fg"><label>Qué</label><select id="pa">
-    <optgroup label="Recetas">${D.recetas.map(r => `<option value="r:${r.id}">${esc(r.titulo)}</option>`).join('')}</optgroup>
-    <optgroup label="Alimentos">${D.alimentos.map(a => `<option value="a:${a.id}">${esc(a.nombre)}</option>`).join('')}</optgroup>
-  </select></div>
-  <div class="fg"><label>Cantidad</label>
-    <input id="pc" type="number" step="0.5" inputmode="decimal" class="mono" value="1">
-    <div class="t2" style="margin-top:4px">Porciones para recetas, gramos para alimentos.</div></div>
-  <div class="fg"><label>Repetir</label><div class="seg" id="segRep">
-    <button data-rep="1" class="on">Solo este día</button>
-    <button data-rep="all">Todos los días</button></div></div>
-  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:10px" data-act="pi-save">Añadir</button>`);
-  window._rep = '1';
-  $('pa').onchange = () => { const [t] = $('pa').value.split(':'); $('pc').value = t === 'r' ? 1 : 100; };
-  $('pa').dispatchEvent(new Event('change'));
+let piMom = null, piSel = null, piTab = 'rec';
+
+function formPlanItem(momId) {
+  piMom = momId; piSel = null; piTab = D.recetas.length ? 'rec' : 'ali';
+  const m = D.momentos.find(x => x.id === momId);
+  sheet(`Añadir a ${esc(m ? m.nombre : 'día ' + diaEd)}`, `<div id="pibox"></div>`);
+  pintaPicker();
 }
+function pintaPicker() {
+  const box = $('pibox'); if (!box) return;
+  if (piSel) return pintaCantidad();
+  const q = (window._pq || '').toLowerCase();
+  const recs = D.recetas.filter(r => r.titulo.toLowerCase().includes(q));
+  const alis = D.alimentos.filter(a => a.nombre.toLowerCase().includes(q));
+  box.innerHTML = `
+  <div class="ptabs mb">
+    <button class="ptab ${piTab === 'rec' ? 'on' : ''}" data-pitab="rec">Recetas</button>
+    <button class="ptab ${piTab === 'ali' ? 'on' : ''}" data-pitab="ali">Alimentos</button></div>
+  <input id="piq" placeholder="Buscar…" value="${esc(window._pq || '')}" autocomplete="off" style="margin-bottom:10px">
+  ${piTab === 'rec' ? (recs.length ? `<div class="rgrid">${recs.map(r => {
+      const auto = macrosReceta(r), k = r.kcal || (auto && auto.kcal);
+      return `<button class="rcard" data-pipick="r:${r.id}">
+        <div class="rimg" ${r.imagen ? `data-foto="${esc(r.imagen)}"` : ''}>
+          ${r.imagen ? '' : `<span class="rini">${esc(r.titulo.trim()[0] || '?').toUpperCase()}</span>`}</div>
+        <div class="rinfo"><div class="rtit">${esc(r.titulo)}</div>
+          <div class="rmeta">${k ? Math.round(k) + ' kcal · ' + Math.round(r.proteina || (auto && auto.prot) || 0) + ' g' : 'sin macros'}</div></div></button>`;
+    }).join('')}</div>` : '<div class="empty">Sin recetas. Créalas en Chefcito.</div>')
+  : (alis.length ? `<div class="card">${alis.map(a => `<button class="row tap" style="width:100%;text-align:left" data-pipick="a:${a.id}">
+      <div class="grow"><div class="t1">${esc(a.nombre)}</div>
+        <div class="t2">por 100 ${esc(a.unidad)}${a.porcion ? ' · ración ' + fmtCant(+a.porcion) : ''}</div></div>
+      <div style="text-align:right"><div class="amt">${Math.round(a.kcal)}</div>
+        <div class="t2 mono" style="color:var(--cash)">${(+a.proteina).toFixed(1)} g</div></div></button>`).join('')}</div>`
+    : '<div class="empty">Sin resultados.</div>')}
+  <button class="btn btn-q" style="width:100%;margin-top:10px" data-act="ali-rapido">+ Crear alimento nuevo</button>`;
+  const inp = $('piq');
+  if (inp) inp.oninput = () => { window._pq = inp.value; pintaPicker(); setTimeout(() => { const i = $('piq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 0); };
+  pintarFotos();
+}
+function pintaCantidad() {
+  const box = $('pibox');
+  const o = piSel;
+  const def = o.t === 'r' ? 1 : (o.p || 100);
+  box.innerHTML = `
+  <button class="btn btn-q" style="margin-bottom:12px" data-act="pi-atras">‹ Cambiar</button>
+  <div class="card mb" style="padding:12px 13px">
+    <div class="t1">${esc(o.n)}</div>
+    <div class="t2">${o.t === 'r' ? 'receta' : 'por 100 ' + esc(o.u)}</div></div>
+  <div class="fg"><label>Cantidad ${o.t === 'r' ? '(porciones)' : '(' + esc(o.u) + ')'}</label>
+    <input id="pc" type="number" step="${o.t === 'r' ? '0.5' : '10'}" inputmode="decimal" class="mono" value="${def}"></div>
+  <div id="piprev" class="prevbox"></div>
+  <div class="fg" style="margin-top:10px"><label>Repetir</label><div class="seg" id="segRep">
+    <button data-rep="1" class="on">Solo el día ${diaEd}</button>
+    <button data-rep="all">Todos los días</button></div></div>
+  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:10px" data-act="pi-save">Añadir</button>`;
+  window._rep = '1';
+  $('pc').oninput = previewPI;
+  previewPI();
+  $('pc').select();
+}
+function previewPI() {
+  const o = piSel, c = parseFloat(val('pc')) || 0, box = $('piprev');
+  if (!box || !o) return;
+  let m;
+  if (o.t === 'a') { const al = D.alimentos.find(a => a.id === o.id); m = macros(al, c); }
+  else { const r = D.recetas.find(x => x.id === o.id), auto = macrosReceta(r);
+    const k = +r.kcal || (auto && auto.kcal) || 0, p = +r.proteina || (auto && auto.prot) || 0;
+    m = { kcal: k * c, prot: p * c }; }
+  box.innerHTML = `<div class="fl" style="justify-content:space-around">
+    <div style="text-align:center"><div class="t2">Calorías</div>
+      <div style="font-size:19px;font-weight:700;font-family:'DM Mono',monospace">${Math.round(m.kcal)}</div></div>
+    <div style="text-align:center"><div class="t2">Proteína</div>
+      <div style="font-size:19px;font-weight:700;font-family:'DM Mono',monospace;color:var(--cash)">${m.prot.toFixed(1)} g</div></div></div>`;
+}
+function elegirPI(tok) {
+  const [t, id] = tok.split(':');
+  if (t === 'r') { const r = D.recetas.find(x => x.id === +id); piSel = { t, id: +id, n: r.titulo, u: 'porciones' }; }
+  else { const a = D.alimentos.find(x => x.id === +id); piSel = { t, id: +id, n: a.nombre, u: a.unidad, p: a.porcion }; }
+  pintaCantidad();
+}
+
 async function savePlanItem() {
   const p = D.planesComida.find(x => x.id === planEd);
-  const [t, id] = val('pa').split(':');
+  if (!piSel) return;
   const c = parseFloat(val('pc')); if (!c) return;
-  const base = { plan_id: p.id, momento_id: +val('pm') || null, cantidad: c,
-                 alimento_id: t === 'a' ? +id : null, receta_id: t === 'r' ? +id : null };
+  const base = { plan_id: p.id, momento_id: piMom, cantidad: c,
+                 alimento_id: piSel.t === 'a' ? piSel.id : null,
+                 receta_id: piSel.t === 'r' ? piSel.id : null };
   const dd = window._rep === 'all' ? Array.from({ length: p.dias }, (_, i) => i + 1) : [diaEd];
   try {
     const nuevos = await api.addPlanItems(dd.map(d => ({ ...base, dia: d, orden: p.items.length })));
@@ -2394,7 +2577,7 @@ document.addEventListener('click', async ev => {
   if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
   if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
 
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -2441,6 +2624,10 @@ document.addEventListener('click', async ev => {
   if (d.diaed) { diaEd = +d.diaed; return render(); }
   if (d.delpi) return borrarPlanItem(+d.delpi);
   if (d.cargar) return cargarDiaPlan(+d.cargar);
+  if (d.piadd) { window._pq = ''; return formPlanItem(+d.piadd); }
+  if (d.pitab) { piTab = d.pitab; return pintaPicker(); }
+  if (d.pipick) return elegirPI(d.pipick);
+  if (d.ipick) return elegirIng(+d.ipick);
   if (d.pd) { window._pd = +d.pd;
     $('segPD').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.pd === window._pd)); return; }
   if (d.rep) { window._rep = d.rep;
@@ -2566,7 +2753,10 @@ document.addEventListener('input', ev => {
   if (t.dataset && t.dataset.pre) { precioItem(+t.dataset.pre, t.value); return; }
   if (t.dataset && t.dataset.ig !== undefined) {
     window._ings[+t.dataset.ig][t.dataset.k] = t.value;
+    actualizaMacrosForm();
+    return;
   }
+  if (t.id === 'rp') actualizaMacrosForm();
 });
 document.addEventListener('change', ev => {
   if (ev.target.id === 'fc') subOpts('fc', 'fs');
