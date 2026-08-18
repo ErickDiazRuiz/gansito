@@ -28,7 +28,10 @@ const IC = {
   tool: '<path d="M14.5 5.5a4.5 4.5 0 0 0 5.9 5.9L21 12l-9 9-3-3 9-9z"/><path d="M8 8 4 4M3 9l6-6"/>',
   bread: '<path d="M4 11.5c0-3.6 3.6-5.5 8-5.5s8 1.9 8 5.5c0 1.3-1 2.1-2 2.1v3.6a2.3 2.3 0 0 1-2.3 2.3H8.3A2.3 2.3 0 0 1 6 17.2v-3.6c-1 0-2-.8-2-2.1z"/><path d="M9 9.5c.6 1 .3 2-.4 2.8M13 9.4c.6 1 .3 2-.4 2.8"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  check: '<path d="M4.5 12.5 9 17 19.5 6.5"/>'
+  check: '<path d="M4.5 12.5 9 17 19.5 6.5"/>',
+  chef: '<path d="M7 20.5h10"/><path d="M7.6 16.8h8.8l.7-5.1a3.6 3.6 0 1 0-2.6-6.2 3.6 3.6 0 0 0-6.9 0 3.6 3.6 0 1 0-2.6 6.2z"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.2V12l3.2 2"/>',
+  img: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="9.8" r="1.4"/><path d="m4 16.5 4.6-4a1.7 1.7 0 0 1 2.3.1l5 4.9M15 13.5l1.6-1.4a1.7 1.7 0 0 1 2.2 0L21 14"/>'
 };
 const sv = (n, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w || 1.7}" stroke-linecap="round" stroke-linejoin="round">${IC[n] || IC.box}</svg>`;
 const ICONOS = ['coffee', 'bike', 'wash', 'tool', 'box'];
@@ -53,10 +56,12 @@ const MODS = [
   { id: 'cashito',   nm: 'Cashito',   ic: 'wallet', ac: '--cash', bg: '--cash-bg' },
   { id: 'gansirato', nm: 'Gansirato', ic: 'coffee', ac: '--task', bg: '--task-bg' },
   { id: 'taskito',   nm: 'Taskito',   ic: 'bread',  ac: '--mm',   bg: '--mm-bg' },
+  { id: 'chefcito',  nm: 'Chefcito',  ic: 'chef',   ac: '--chef', bg: '--chef-bg' },
   { id: 'plansito',  nm: 'Plansito',  ic: 'bulb',   ac: '--plan', bg: '--plan-bg' }
 ];
 const ACC = { home: '--task', cashito: '--cash', gansirato: '--task', aparato: '--task',
-              taskito: '--mm', cultivo: '--mm', plansito: '--plan' };
+              taskito: '--mm', cultivo: '--mm', plansito: '--plan',
+              chefcito: '--chef', receta: '--chef' };
 /* Harinas como se venden en Rewe, Edeka, Aldi, Lidl.
    El número Type mide cenizas (minerales) en mg/100 g, no proteína:
    más alto = más salvado = más microbiota nativa y más actividad. */
@@ -156,7 +161,8 @@ const vencidas = () => D.aparatos.reduce((n, a) => n + vencidasDe(a), 0);
 
 /* ══ chrome ══ */
 function drawer() {
-  const cur = view === 'aparato' ? 'gansirato' : view === 'cultivo' ? 'taskito' : view;
+  const cur = view === 'aparato' ? 'gansirato' : view === 'cultivo' ? 'taskito'
+    : view === 'receta' ? 'chefcito' : view;
   let h = `<button class="nav ${cur === 'home' ? 'sel' : ''}" data-go="home">
     <div class="ic" style="background:var(--sur2);color:var(--tx2)">${sv('home')}</div><div class="lb">Inicio</div></button>`;
   MODS.forEach(m => {
@@ -164,6 +170,7 @@ function drawer() {
     if (m.id === 'cashito') mt = `<span class="mono">${eur(balance())}</span>`;
     if (m.id === 'gansirato') mt = vencidas() ? `<span class="chip" style="background:var(--task-bg);color:var(--task)">${vencidas()}</span>` : 'al día';
     if (m.id === 'taskito') mt = D.cultivos.length + (D.cultivos.length === 1 ? ' cultivo' : ' cultivos');
+    if (m.id === 'chefcito') mt = D.recetas.length + (D.recetas.length === 1 ? ' receta' : ' recetas');
     if (m.id === 'plansito') mt = D.planes.filter(p => p.estado === 'curso').length + ' en curso';
     h += `<button class="nav ${cur === m.id ? 'sel' : ''}" data-go="${m.id}">
       <div class="ic" style="background:var(${m.bg});color:var(${m.ac})">${sv(m.ic)}</div>
@@ -175,7 +182,7 @@ function drawer() {
 }
 function crumb() {
   const p = [`<button data-go="home">gansito</button>`];
-  const PADRE = { aparato: 'gansirato', cultivo: 'taskito' };
+  const PADRE = { aparato: 'gansirato', cultivo: 'taskito', receta: 'chefcito' };
   if (view !== 'home') {
     const id = PADRE[view] || view;
     p.push('<span>/</span>', PADRE[view]
@@ -189,6 +196,10 @@ function crumb() {
   if (view === 'cultivo') {
     const c = cul();
     if (c) p.push('<span>/</span>', `<span style="color:var(--mm)">${esc(c.nombre.toLowerCase())}</span>`);
+  }
+  if (view === 'receta') {
+    const r = rec();
+    if (r) p.push('<span>/</span>', `<span style="color:var(--chef)">${esc(r.titulo.toLowerCase())}</span>`);
   }
   $('cr').innerHTML = p.join('');
 }
@@ -252,6 +263,12 @@ function vHome() {
           ? `<span class="chip" style="background:var(--task-bg);color:var(--task)">alimentar</span>`
           : `<span class="chip" style="color:var(--tx3)">en nevera</span>`; }
       return `<span class="chip" style="background:var(--mm-bg);color:var(--mm)">día ${diaCultivo(c)}/${c.plan_dias}</span>`; })()}
+    </div></button>
+
+  <button class="proj" data-go="chefcito"><div class="ptop">
+    <div class="pic" style="background:var(--chef-bg);color:var(--chef)">${sv('chef')}</div>
+    <div class="grow"><div class="pnm">Chefcito</div><div class="psb">Recetario</div></div>
+    <span class="chip" style="color:var(--tx3)">${D.recetas.length} receta${D.recetas.length === 1 ? '' : 's'}</span>
     </div></button>
 
   <button class="proj" data-go="plansito"><div class="ptop">
@@ -1255,6 +1272,263 @@ async function borrarRegistro(id) {
     toast('Observación eliminada'); close(); render(); } catch (e) { fallo(e); }
 }
 
+/* ══ chefcito — recetario ══ */
+const rec = () => D.recetas.find(r => String(r.id) === String(arg));
+const catNom = id => (D.categorias.find(c => c.id === id) || {}).nombre || 'Sin categoría';
+const catCol = id => (D.categorias.find(c => c.id === id) || {}).color || 'var(--tx3)';
+
+/* Caché de URLs firmadas: caducan a las 2 h y no queremos
+   pedir una nueva por cada repintado. */
+const fotoCache = new Map();
+async function pintarFotos() {
+  const nodos = document.querySelectorAll('[data-foto]:not([data-listo])');
+  for (const n of nodos) {
+    const p = n.dataset.foto;
+    n.dataset.listo = '1';
+    try {
+      let u = fotoCache.get(p);
+      if (!u) { u = await api.urlFoto(p); fotoCache.set(p, u); }
+      n.style.backgroundImage = `url("${u}")`;
+      n.classList.add('cargada');
+    } catch (_) { n.classList.add('rota'); }
+  }
+}
+
+function vChefcito() {
+  const cats = D.categorias;
+  const porCat = {};
+  D.recetas.forEach(r => { (porCat[r.categoria_id ?? 0] ??= []).push(r); });
+  const orden = [...cats.filter(c => porCat[c.id]), ...(porCat[0] ? [{ id: 0, nombre: 'Sin categoría', color: '#63615B' }] : [])];
+  const filtradas = cat ? orden.filter(c => String(c.id) === String(cat)) : orden;
+
+  return `<div class="view">
+  <div class="hrow"><div class="h1">Chefcito</div>
+    <span class="sub">${D.recetas.length} receta${D.recetas.length === 1 ? '' : 's'}</span></div>
+
+  ${cats.length ? `<div class="tabs">
+    <button class="tab ${!cat ? 'on' : ''}" data-rcat="">Todas</button>
+    ${cats.map(c => `<button class="tab ${String(cat) === String(c.id) ? 'on' : ''}" data-rcat="${c.id}"
+      ${String(cat) === String(c.id) ? `style="border-color:${c.color};color:${c.color}"` : ''}>${esc(c.nombre)}</button>`).join('')}
+    </div>` : ''}
+
+  <button class="btn" style="width:100%;background:var(--chef);color:#2B1206;margin-bottom:14px" data-act="receta-nueva">
+    + Nueva receta</button>
+
+  ${D.recetas.length ? filtradas.map(c => `
+    <div class="lbl" style="color:${c.color}">${esc(c.nombre)} · ${porCat[c.id].length}</div>
+    <div class="rgrid">${porCat[c.id].map(r => tarjetaReceta(r)).join('')}</div>`).join('')
+    : '<div class="empty">Sin recetas todavía. Añade la primera.</div>'}
+
+  <div style="text-align:center;margin-top:16px">
+    <button class="btn btn-q" data-act="cats">Gestionar categorías</button></div></div>`;
+}
+function tarjetaReceta(r) {
+  return `<button class="rcard" data-receta="${r.id}">
+    <div class="rimg" ${r.imagen ? `data-foto="${esc(r.imagen)}"` : ''}>
+      ${r.imagen ? '' : `<span class="rini">${esc(r.titulo.trim()[0] || '?').toUpperCase()}</span>`}
+      ${r.favorita ? '<span class="rfav">★</span>' : ''}</div>
+    <div class="rinfo">
+      <div class="rtit">${esc(r.titulo)}</div>
+      <div class="rmeta">${r.porciones} ${esc(r.unidad_rinde)}${r.tiempo_min ? ' · ' + r.tiempo_min + ' min' : ''}</div></div>
+  </button>`;
+}
+
+function vReceta() {
+  const r = rec();
+  if (!r) return '<div class="view"><div class="empty">Receta no encontrada.</div></div>';
+  const f = window._escala || 1;
+  const base = +r.porciones || 1;
+  const muestra = +(base * f).toFixed(2);
+  return `<div class="view">
+  <div class="rhero" ${r.imagen ? `data-foto="${esc(r.imagen)}"` : ''}>
+    ${r.imagen ? '' : `<span class="rini" style="font-size:44px">${esc(r.titulo.trim()[0] || '?').toUpperCase()}</span>`}</div>
+
+  <div class="hrow" style="margin-top:12px">
+    <div class="h1">${esc(r.titulo)}</div>
+    <button class="btn btn-q" style="padding:5px 9px" data-fav="${r.id}">${r.favorita ? '★' : '☆'}</button></div>
+
+  <div class="fl mb" style="flex-wrap:wrap">
+    <span class="chip" style="background:var(--sur2);color:${catCol(r.categoria_id)}">${esc(catNom(r.categoria_id))}</span>
+    ${r.tiempo_min ? `<span class="chip" style="background:var(--sur2);color:var(--tx2)">${r.tiempo_min} min</span>` : ''}</div>
+
+  <div class="card mb" style="padding:12px 13px">
+    <div class="fl" style="align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="lbl" style="margin:0">Ingredientes</div>
+      <div class="esc">
+        <button data-esc="0.5" class="${f === 0.5 ? 'on' : ''}">½</button>
+        <button data-esc="1" class="${f === 1 ? 'on' : ''}">1×</button>
+        <button data-esc="2" class="${f === 2 ? 'on' : ''}">2×</button>
+        <button data-esc="3" class="${f === 3 ? 'on' : ''}">3×</button></div></div>
+    <div class="t2 mb">Para ${muestra} ${esc(r.unidad_rinde)}</div>
+    ${r.ings.length ? `<div>${r.ings.map(i => `<div class="ing">
+      <span class="icant mono">${i.cantidad != null ? fmtCant(+i.cantidad * f) + (i.unidad ? ' ' + esc(i.unidad) : '') : '—'}</span>
+      <span class="inom">${esc(i.nombre)}${i.nota ? `<span class="t2"> · ${esc(i.nota)}</span>` : ''}</span></div>`).join('')}</div>`
+      : '<div class="t2">Sin ingredientes.</div>'}</div>
+
+  ${r.preparacion ? `<div class="lbl">Preparación</div>
+  <div class="card mb" style="padding:13px"><div class="prep">${esc(r.preparacion)}</div></div>` : ''}
+
+  ${r.notas ? `<div class="lbl">Notas</div>
+  <div class="card mb" style="padding:13px"><div class="t2" style="line-height:1.6">${esc(r.notas)}</div></div>` : ''}
+
+  <div class="fl"><button class="btn btn-q" style="flex:1" data-receta-edit="${r.id}">Editar</button>
+    <button class="btn btn-d" data-del="receta" data-id="${r.id}">Eliminar</button></div></div>`;
+}
+/* Redondeo legible: 0.5 no debe salir como 0.50, ni 133.333 como está */
+function fmtCant(n) {
+  if (n >= 100) return String(Math.round(n));
+  if (n >= 10)  return String(Math.round(n * 2) / 2).replace('.5', ',5');
+  return String(Math.round(n * 4) / 4).replace('.25', ',25').replace('.5', ',5').replace('.75', ',75');
+}
+
+/* ── formulario ── */
+const UNIDADES = ['g', 'kg', 'ml', 'l', 'u', 'cda', 'cdta', 'taza', 'pizca', 'diente', 'rodaja', 'lata'];
+
+function formReceta(id) {
+  const r = id ? D.recetas.find(x => x.id === id) : null;
+  window._ings = r ? r.ings.map(i => ({ cantidad: i.cantidad, unidad: i.unidad, nombre: i.nombre, nota: i.nota }))
+                   : [{ cantidad: null, unidad: '', nombre: '', nota: '' }];
+  window._foto = r ? r.imagen : null;
+  sheet(r ? 'Editar receta' : 'Nueva receta', `
+  <div class="fg"><label>Foto</label>
+    <div class="fotobox" id="fotobox" ${r && r.imagen ? `data-foto="${esc(r.imagen)}"` : ''}>
+      ${r && r.imagen ? '' : `<span style="width:26px;height:26px;color:var(--tx3)">${sv('img')}</span>
+        <span class="t2">Toca para elegir una foto</span>`}</div>
+    <input type="file" id="fotoin" accept="image/*" class="hide"></div>
+
+  <div class="fg"><label>Título</label><input id="rt" placeholder="Wraps de pollo" value="${r ? esc(r.titulo) : ''}"></div>
+
+  <div class="fl">
+    <div class="fg grow"><label>Categoría</label><select id="rc">
+      <option value="">Sin categoría</option>
+      ${D.categorias.map(c => `<option value="${c.id}" ${r && r.categoria_id === c.id ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}
+    </select></div>
+    <div class="fg" style="width:92px"><label>Tiempo</label>
+      <input id="rmin" type="number" inputmode="numeric" class="mono" placeholder="min" value="${r ? (r.tiempo_min || '') : ''}"></div></div>
+
+  <div class="fl">
+    <div class="fg" style="width:88px"><label>Rinde</label>
+      <input id="rp" type="number" step="0.5" inputmode="decimal" class="mono" value="${r ? r.porciones : 4}"></div>
+    <div class="fg grow"><label>Unidad</label>
+      <input id="ru" list="dlu" placeholder="porciones" value="${r ? esc(r.unidad_rinde) : 'porciones'}">
+      <datalist id="dlu"><option value="porciones"><option value="días"><option value="raciones"><option value="vasos"><option value="unidades"></datalist></div></div>
+
+  <div class="fg"><label>Ingredientes</label>
+    <div id="inglist"></div>
+    <button class="btn btn-q" style="width:100%;margin-top:6px" data-act="ing-add">+ Añadir ingrediente</button></div>
+
+  <div class="fg"><label>Preparación</label>
+    <textarea id="rprep" style="min-height:130px;line-height:1.6" placeholder="1. Calienta la sartén…">${r ? esc(r.preparacion || '') : ''}</textarea></div>
+
+  <div class="fg"><label>Notas</label>
+    <textarea id="rnot" style="min-height:56px" placeholder="Variantes, de dónde salió…">${r ? esc(r.notas || '') : ''}</textarea></div>
+
+  <div class="fl" style="margin-top:12px">
+    <button class="btn" style="flex:1;background:var(--chef);color:#2B1206" data-save="receta" data-id="${id || 0}">Guardar</button>
+    ${r ? `<button class="btn btn-d" data-del="receta" data-id="${id}">Eliminar</button>` : ''}</div>`);
+  pintaIngs();
+  $('fotobox').onclick = () => $('fotoin').click();
+  $('fotoin').onchange = subirFotoReceta;
+  pintarFotos();
+}
+function pintaIngs() {
+  const box = $('inglist'); if (!box) return;
+  box.innerHTML = window._ings.map((x, i) => `<div class="ingrow">
+    <input class="mono" style="width:56px" inputmode="decimal" placeholder="200" value="${x.cantidad ?? ''}" data-ing="${i}" data-k="cantidad">
+    <input style="width:64px" list="dlun" placeholder="g" value="${esc(x.unidad || '')}" data-ing="${i}" data-k="unidad">
+    <input style="flex:1;min-width:0" placeholder="pollo" value="${esc(x.nombre || '')}" data-ing="${i}" data-k="nombre">
+    <button class="ingdel" data-ingdel="${i}" aria-label="Quitar">×</button></div>`).join('')
+    + `<datalist id="dlun">${UNIDADES.map(u => `<option value="${u}">`).join('')}</datalist>`;
+}
+async function subirFotoReceta(ev) {
+  const f = ev.target.files[0]; if (!f) return;
+  if (f.size > 6e6) return toast('La foto pesa más de 6 MB', null, true);
+  const box = $('fotobox');
+  box.innerHTML = '<span class="t2">Subiendo…</span>';
+  try {
+    const path = await api.subirFoto(f);
+    window._foto = path;
+    box.innerHTML = '';
+    box.dataset.foto = path;
+    delete box.dataset.listo;
+    await pintarFotos();
+  } catch (e) { box.innerHTML = '<span class="t2">No se pudo subir</span>'; fallo(e); }
+}
+async function saveReceta(id) {
+  const titulo = val('rt');
+  if (!titulo) return $('rt').focus();
+  const o = {
+    titulo,
+    categoria_id: val('rc') ? +val('rc') : null,
+    imagen: window._foto || null,
+    porciones: parseFloat(val('rp')) || 1,
+    unidad_rinde: val('ru') || 'porciones',
+    tiempo_min: parseInt(val('rmin'), 10) || null,
+    preparacion: val('rprep') || null,
+    notas: val('rnot') || null
+  };
+  const ings = window._ings
+    .filter(x => (x.nombre || '').trim())
+    .map(x => ({ cantidad: x.cantidad === '' || x.cantidad == null ? null : parseFloat(x.cantidad),
+                 unidad: (x.unidad || '').trim() || null,
+                 nombre: x.nombre.trim(), nota: (x.nota || '').trim() || null }));
+  try {
+    let r;
+    if (id) { r = await api.editReceta(id, o); Object.assign(D.recetas.find(x => x.id === id), r); }
+    else { r = await api.addReceta(o); D.recetas.push({ ...r, ings: [] }); }
+    const guardados = await api.setIngredientes(r.id, ings);
+    D.recetas.find(x => x.id === r.id).ings = guardados;
+    D.recetas.sort((a, b) => a.titulo.localeCompare(b.titulo, 'es'));
+    toast(id ? 'Receta actualizada' : 'Receta guardada');
+    close();
+    if (!id) go('receta', r.id); else render();
+  } catch (e) { fallo(e); }
+}
+async function borrarReceta(id) {
+  const r = D.recetas.find(x => x.id === id);
+  try {
+    await api.delReceta(id);
+    if (r && r.imagen) api.borrarFoto(r.imagen).catch(() => {});
+    D.recetas = D.recetas.filter(x => x.id !== id);
+    toast('Receta eliminada');
+    close(); go('chefcito');
+  } catch (e) { fallo(e); }
+}
+async function toggleFav(id) {
+  const r = D.recetas.find(x => x.id === id);
+  try { const u = await api.editReceta(id, { favorita: !r.favorita }); Object.assign(r, u); render(); }
+  catch (e) { fallo(e); }
+}
+
+function formCats() {
+  sheet('Categorías', `
+  <div class="card mb">${D.categorias.map(c => `<div class="row">
+    <span style="width:8px;height:8px;border-radius:50%;background:${c.color};flex:none"></span>
+    <div class="grow"><div class="t1">${esc(c.nombre)}</div>
+      <div class="t2">${D.recetas.filter(r => r.categoria_id === c.id).length} recetas</div></div>
+    <button class="btn btn-q" style="padding:5px 9px" data-delcat="${c.id}">×</button></div>`).join('')
+    || '<div class="empty">Sin categorías.</div>'}</div>
+  <div class="fl"><input id="ncat" placeholder="Nombre de la categoría" style="flex:1">
+    <button class="btn" style="background:var(--chef);color:#2B1206" data-act="cat-add">Añadir</button></div>`);
+}
+async function addCat() {
+  const n = val('ncat'); if (!n) return;
+  const paleta = ['#F4A261', '#52B788', '#4A9FD8', '#E9C46A', '#6BC5C5', '#E76F8F', '#8B7DDB'];
+  try {
+    const c = await api.addCategoria({ nombre: n, color: paleta[D.categorias.length % paleta.length],
+                                       orden: D.categorias.length + 1 });
+    D.categorias.push(c); toast('Categoría añadida'); close(); render();
+  } catch (e) { fallo(e); }
+}
+async function delCat(id) {
+  try {
+    await api.delCategoria(id);
+    D.categorias = D.categorias.filter(c => c.id !== id);
+    D.recetas.forEach(r => { if (r.categoria_id === id) r.categoria_id = null; });
+    toast('Categoría eliminada'); close(); render();
+  } catch (e) { fallo(e); }
+}
+
 /* ── plansito ── */
 function vPlansito() {
   const l = filt === 'todos' ? D.planes : D.planes.filter(p => p.estado === filt);
@@ -1391,7 +1665,7 @@ async function pintaPush() {
 
 /* ══ eventos (delegación global) ══ */
 document.addEventListener('click', async ev => {
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -1419,6 +1693,17 @@ document.addEventListener('click', async ev => {
   if (d.cultivo) return go('cultivo', d.cultivo);
   if (d.registro) return formRegistro(+d.registro);
   if (d.dellog) return borrarLog(+d.dellog);
+  if (d.receta) { window._escala = 1; return go('receta', d.receta); }
+  if (d.recetaEdit) return formReceta(+d.recetaEdit);
+  if (d.rcat !== undefined) { cat = d.rcat || null; return render(); }
+  if (d.esc) { window._escala = +d.esc; return render(); }
+  if (d.fav) return toggleFav(+d.fav);
+  if (d.delcat) return delCat(+d.delcat);
+  if (d.ingdel) {
+    window._ings.splice(+d.ingdel, 1);
+    if (!window._ings.length) window._ings.push({ cantidad: null, unidad: '', nombre: '', nota: '' });
+    return pintaIngs();
+  }
 
   if (d.mk) {
     window._mk[d.mk] = !window._mk[d.mk];
@@ -1464,7 +1749,7 @@ document.addEventListener('click', async ev => {
     el.disabled = true;
     const f = { gasto: saveGasto, ingreso: saveIngreso, budget: saveBudget, fijo: saveFijo,
                 aparato: saveAparato, tarea: saveTarea, plan: savePlan,
-                cultivo: saveCultivo, registro: saveRegistro }[d.save];
+                cultivo: saveCultivo, registro: saveRegistro, receta: saveReceta }[d.save];
     await f(id);
     el.disabled = false;
     return;
@@ -1473,7 +1758,7 @@ document.addEventListener('click', async ev => {
     const id = +d.id;
     const f = { gasto: borrarGasto, ingreso: borrarIngreso, fijo: borrarFijo,
                 aparato: borrarAparato, tarea: borrarTarea, plan: borrarPlan,
-                cultivo: borrarCultivo, registro: borrarRegistro }[d.del];
+                cultivo: borrarCultivo, registro: borrarRegistro, receta: borrarReceta }[d.del];
     return f(id);
   }
 
@@ -1496,9 +1781,19 @@ document.addEventListener('click', async ev => {
     case 'guardar': return guardarNevera();
     case 'despertar': return despertar();
     case 'mant': return alimentarMant();
+    case 'receta-nueva': return formReceta();
+    case 'ing-add': window._ings.push({ cantidad: null, unidad: '', nombre: '', nota: '' }); return pintaIngs();
+    case 'cats': return formCats();
+    case 'cat-add': return addCat();
     case 'push-on': return activarPush();
     case 'push-off': return desactivarPush();
     case 'salir': await api.logout(); return location.reload();
+  }
+});
+document.addEventListener('input', ev => {
+  const t = ev.target;
+  if (t.dataset && t.dataset.ing !== undefined) {
+    window._ings[+t.dataset.ing][t.dataset.k] = t.value;
   }
 });
 document.addEventListener('change', ev => {
@@ -1523,11 +1818,13 @@ function render() {
   document.documentElement.style.setProperty('--sweep', acc || '#52B788');
   const s = $('scan'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go');
   const v = { home: vHome, cashito: vCashito, gansirato: vGansirato, aparato: vAparato,
-              taskito: vTaskito, cultivo: vCultivo, plansito: vPlansito }[view];
+              taskito: vTaskito, cultivo: vCultivo, chefcito: vChefcito, receta: vReceta,
+              plansito: vPlansito }[view];
   $('app').innerHTML = v();
   $('mk').style.color = 'var(' + ACC[view] + ')';
   crumb(); drawer();
   if (view === 'gansirato') pintaPush();
+  if (view === 'chefcito' || view === 'receta') pintarFotos();
   if (view === 'cashito' && tab === 'analisis') requestAnimationFrame(() => { donut(); line(); });
   else if (view === 'cultivo') { if (ch1) { ch1.destroy(); ch1 = null; } requestAnimationFrame(chartMM); }
   else { if (ch1) { ch1.destroy(); ch1 = null; } if (ch2) { ch2.destroy(); ch2 = null; } }

@@ -5,6 +5,7 @@
   --task:#F4A261;--task-bg:#2E1C0A;
   --plan:#8B7DDB;--plan-bg:#1A1630;
   --mm:#4A9FD8;--mm-bg:#0A2438;
+  --chef:#E8825C;--chef-bg:#2E1109;
   --dng:#E63946;--dng-bg:#2B0C0F;--r:12px;--rs:7px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -178,6 +179,45 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .sw i{position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--tx3);transition:all .18s}
 .sw.on{background:var(--cash-bg);border-color:var(--cash)}
 .sw.on i{left:17px;background:var(--cash)}
+
+/* ── chefcito ── */
+.rgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:16px}
+@media (min-width:520px){.rgrid{grid-template-columns:1fr 1fr 1fr}}
+.rcard{text-align:left;background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);
+  overflow:hidden;transition:border-color .15s,transform .12s}
+.rcard:hover{border-color:var(--bdr2)}
+.rcard:active{transform:scale(.985)}
+.rimg{position:relative;aspect-ratio:4/3;background:var(--sur3);background-size:cover;background-position:center;
+  display:grid;place-items:center;opacity:0;transition:opacity .3s}
+.rimg.cargada,.rimg.rota,.rimg:not([data-foto]){opacity:1}
+.rini{font-size:26px;font-weight:700;color:var(--tx3);font-family:'DM Mono',monospace}
+.rfav{position:absolute;top:6px;right:8px;color:var(--chef);font-size:14px;
+  text-shadow:0 1px 4px rgba(0,0,0,.8)}
+.rinfo{padding:9px 11px 11px}
+.rtit{font-size:12.5px;font-weight:600;line-height:1.3;letter-spacing:-.1px}
+.rmeta{font-size:10px;color:var(--tx3);margin-top:3px}
+.rhero{aspect-ratio:16/9;border-radius:var(--r);background:var(--sur3);background-size:cover;
+  background-position:center;display:grid;place-items:center;opacity:0;transition:opacity .3s}
+.rhero.cargada,.rhero.rota,.rhero:not([data-foto]){opacity:1}
+
+.esc{display:flex;gap:3px;background:var(--sur2);border-radius:6px;padding:2px}
+.esc button{padding:3px 9px;border-radius:4px;font-size:11px;color:var(--tx3);font-family:'DM Mono',monospace}
+.esc button.on{background:var(--sur3);color:var(--chef)}
+
+.ing{display:flex;gap:10px;padding:6px 0;align-items:baseline}
+.ing+.ing{border-top:1px solid var(--bdr)}
+.icant{width:76px;flex:none;color:var(--chef);font-size:12px;text-align:right}
+.inom{flex:1;font-size:12.5px}
+.prep{font-size:12.5px;line-height:1.75;color:var(--tx2);white-space:pre-line}
+
+.fotobox{aspect-ratio:16/9;border:1px dashed var(--bdr2);border-radius:var(--rs);background:var(--sur2);
+  background-size:cover;background-position:center;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:border-color .15s}
+.fotobox:hover{border-color:var(--chef)}
+.ingrow{display:flex;gap:5px;margin-bottom:5px;align-items:center}
+.ingrow input{padding:7px 9px}
+.ingdel{width:26px;height:30px;flex:none;color:var(--tx3);font-size:16px;line-height:1;border-radius:6px}
+.ingdel:hover{color:#E06A72;background:var(--sur2)}
 
 /* sheet */
 .ov{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center}

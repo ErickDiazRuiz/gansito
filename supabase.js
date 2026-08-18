@@ -10,6 +10,7 @@ const gans = () => sb.schema('gansirato');   // aparatos y mantenimiento
 const task = () => sb.schema('taskito');     // procesos vivos (masa madre)
 const plan = () => sb.schema('plansito');
 const gnst = () => sb.schema('gansito');    // infraestructura (push)
+const chef = () => sb.schema('chefcito');   // recetario
 
 /* ── auth ── */
 export const session = async () => (await sb.auth.getSession()).data.session;
@@ -36,7 +37,7 @@ async function all(q, cols, order) {
 export async function cargarTodo() {
   const [gastos, ingresos, fijos, items, presupuestos,
          aparatos, tareas, log, consumibles, videos, planes,
-         cultivos, registros] = await Promise.all([
+         cultivos, registros, categorias, recetas, ingredientes] = await Promise.all([
     all(() => cash().from('gastos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('ingresos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('gastos_fijos'), '*', { col: 'dia_cobro' }),
@@ -49,7 +50,10 @@ export async function cargarTodo() {
     all(() => gans().from('videos'), '*'),
     all(() => plan().from('planes'), '*', { col: 'created_at', asc: false }),
     all(() => task().from('cultivos'), '*', { col: 'inicio' }),
-    all(() => task().from('registros'), '*', { col: 'fecha', asc: false })
+    all(() => task().from('registros'), '*', { col: 'fecha', asc: false }),
+    all(() => chef().from('categorias'), '*', { col: 'orden' }),
+    all(() => chef().from('recetas'), '*', { col: 'titulo' }),
+    all(() => chef().from('ingredientes'), '*', { col: 'orden' })
   ]);
 
   // Ensamblar el árbol de Taskito
@@ -68,7 +72,10 @@ export async function cargarTodo() {
 
   cultivos.forEach(c => { c.registros = registros.filter(r => r.cultivo_id === c.id); });
 
-  return { gastos, ingresos, fijos, items, presupuestos, aparatos, planes, cultivos };
+  recetas.forEach(r => { r.ings = ingredientes.filter(i => i.receta_id === r.id); });
+
+  return { gastos, ingresos, fijos, items, presupuestos, aparatos, planes, cultivos,
+           categorias, recetas };
 }
 
 /* ── escritura ──
@@ -118,6 +125,36 @@ export const addRegistro  = (r)     => one(task().from('registros').insert(r));
 export const editRegistro = (id, r) => one(task().from('registros').update(r).eq('id', id));
 export const delRegistro  = (id)    => task().from('registros').delete().eq('id', id);
 
+/* ── chefcito ── */
+export const addReceta  = (r)     => one(chef().from('recetas').insert(r));
+export const editReceta = (id, r) => one(chef().from('recetas').update({ ...r, updated_at: new Date().toISOString() }).eq('id', id));
+export const delReceta  = (id)    => chef().from('recetas').delete().eq('id', id);
+export const addCategoria = (c)   => one(chef().from('categorias').insert(c));
+export const delCategoria = (id)  => chef().from('categorias').delete().eq('id', id);
+
+export async function setIngredientes(receta_id, lista) {
+  await chef().from('ingredientes').delete().eq('receta_id', receta_id);
+  if (!lista.length) return [];
+  const { data, error } = await chef().from('ingredientes')
+    .insert(lista.map((x, i) => ({ ...x, receta_id, orden: i }))).select();
+  if (error) throw error;
+  return data;
+}
+
+export async function subirFoto(file) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await sb.storage.from('chefcito-fotos').upload(path, file, { upsert: false });
+  if (error) throw error;
+  return path;
+}
+export async function urlFoto(path) {
+  const { data, error } = await sb.storage.from('chefcito-fotos').createSignedUrl(path, 7200);
+  if (error) throw error;
+  return data.signedUrl;
+}
+export const borrarFoto = (path) => sb.storage.from('chefcito-fotos').remove([path]);
+
 /* ── videos ── */
 export async function subirVideo(tarea_id, titulo, file) {
   const path = `${tarea_id}/${Date.now()}_${file.name.replace(/[^\w.\-]/g, '_')}`;
@@ -147,5 +184,6 @@ export function escuchar(onChange) {
     .on('postgres_changes', { event: '*', schema: 'gansirato' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'taskito' },   onChange)
     .on('postgres_changes', { event: '*', schema: 'plansito' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'chefcito' }, onChange)
     .subscribe();
 }

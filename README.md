@@ -18,6 +18,7 @@ Navegador (GitHub Pages) ──supabase-js──► Supabase
 | Cashito | Gastos, ingresos, fijos, presupuesto | `cashito` |
 | Gansirato | Mantenimiento de aparatos | `gansirato` |
 | Taskito | Procesos vivos (masa madre) | `taskito` |
+| Chefcito | Recetario con fotos | `chefcito` |
 | Plansito | Ideas y planes | `plansito` |
 
 ---
@@ -118,6 +119,8 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 
 **Tiempo real.** Cualquier escritura repinta todas las pestañas abiertas por websocket. Si más adelante conectas un ESP32 que escriba en Postgres, la web reacciona sola.
 
+**Las cantidades de Chefcito se guardan separadas** (`200` · `g` · `pollo`) en vez de como texto, que es lo que permite escalar la receta a ½×, 2× o 3× sin volver a escribirla. El redondeo se ajusta a la magnitud: por debajo de 10 va a cuartos, por encima de 100 a enteros, porque «133,33 g de harina» no lo pesa nadie.
+
 **Las harinas siguen la nomenclatura alemana.** El número Type mide cenizas (minerales) en mg por 100 g, no proteína: cuanto más alto, más salvado, más microbiota nativa y más actividad. Por eso se arranca con integral o centeno y se mantiene con Type 550. Cada opción del desplegable trae su nota y una etiqueta de si es recomendable — la Type 405 aparece marcada como no recomendada porque está demasiado refinada para sostener un cultivo.
 
 **El plan de la masa madre es feedforward; los registros son el feedback.** Las etapas dan la trayectoria de referencia según velocidad (1 o 2 alimentaciones diarias) y duración (7, 10 o 14 días). Lo que observas y anotas es lo que corrige la estimación real.
@@ -139,6 +142,7 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 | `db3.sql` | Plan de cultivo y modo nevera. Después de `db2.sql`. |
 | `db4.sql` | Harina de arranque separada. Después de `db3.sql`. |
 | `db5.sql` | Suscripciones push y vista de pendientes. Después de `db4.sql`. |
+| `db6.sql` | Chefcito: recetas, categorías y fotos. Después de `db5.sql`. |
 | `sw.js` | Service Worker: recibe los push con la web cerrada. |
 | `cron/avisar.mjs` | Job diario que revisa vencimientos y envía los avisos. |
 | `.github/workflows/avisos.yml` | El cron de GitHub Actions. |
