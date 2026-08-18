@@ -39,7 +39,7 @@ export async function cargarTodo() {
   const [gastos, ingresos, fijos, items, presupuestos,
          aparatos, tareas, log, consumibles, videos, planes,
          cultivos, registros, categorias, recetas, ingredientes,
-         alimentos, momentos, registro, planes, planItems, objetivos,
+         alimentos, momentos, registro, planesComida, planItems, objetivos,
          compras, compraItems] = await Promise.all([
     all(() => cash().from('gastos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('ingresos'), '*', { col: 'fecha', asc: false }),
@@ -87,7 +87,7 @@ export async function cargarTodo() {
 
   return { gastos, ingresos, fijos, items, presupuestos, aparatos, planes, cultivos,
            categorias, recetas, alimentos, momentos, registro,
-           planes: planes.map(p => ({ ...p, items: planItems.filter(i => i.plan_id === p.id) })),
+           planesComida: planesComida.map(p => ({ ...p, items: planItems.filter(i => i.plan_id === p.id) })),
            objetivo: objetivos[0] || { kcal: 2000, proteina: 120 },
            compras: compras.map(c => ({ ...c, items: compraItems.filter(i => i.compra_id === c.id) })) };
 }
