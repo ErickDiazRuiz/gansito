@@ -39,7 +39,7 @@ export async function cargarTodo() {
   const [gastos, ingresos, fijos, items, presupuestos,
          aparatos, tareas, log, consumibles, videos, planes,
          cultivos, registros, categorias, recetas, ingredientes,
-         alimentos, momentos, registro, planesComida, planItems, objetivos,
+         alimentos, momentos, registro, planesComida, planItems, objetivos, medidas,
          compras, compraItems] = await Promise.all([
     all(() => cash().from('gastos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('ingresos'), '*', { col: 'fecha', asc: false }),
