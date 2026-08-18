@@ -326,11 +326,21 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .tc{font-size:12px;text-align:right;flex:none}
 .tnm{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tsub{font-size:9.5px;color:var(--tx3);margin-top:1px}
-.tedit{width:30px;height:28px;flex:none;border-radius:6px;color:var(--tx3);font-size:12px}
-.tedit:hover{background:var(--sur2);color:var(--comi)}
+.ted{background:none;border:1px solid transparent;border-radius:5px;padding:5px 6px;
+  font-size:12px;text-align:right;flex:none;font-family:'DM Mono',monospace}
+.ted:hover{background:var(--sur2)}
+.ted:focus{background:var(--sur2);border-color:var(--comi);outline:none}
+.ted.tnom{flex:1;min-width:0;text-align:left;font-family:'DM Sans',sans-serif;font-weight:500;width:auto}
+.ted.tsel{font-size:10px;color:var(--tx3);padding:5px 2px;text-align:center;
+  -webkit-appearance:none;appearance:none;font-family:'DM Mono',monospace}
+.tdel{width:26px;height:26px;flex:none;border-radius:6px;color:var(--tx3);font-size:15px;line-height:1}
+.tdel:hover{background:var(--dng-bg);color:#E06A72}
 
 /* sheet */
-.ov{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center}
+.ov{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center;
+  transition:opacity .2s}
+.ov.bajo{opacity:.35;pointer-events:none}
+.ov+.ov{z-index:91}
 .sheet{width:100%;max-width:620px;background:var(--sur);border:1px solid var(--bdr2);
   border-radius:16px 16px 0 0;padding:16px;max-height:88vh;overflow-y:auto;animation:up .26s cubic-bezier(.22,.8,.3,1)}
 @keyframes up{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}

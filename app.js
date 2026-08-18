@@ -208,9 +208,10 @@ function crumb() {
 }
 function go(v, a) {
   view = v; arg = a || null;
+  closeAll();
   if (v === 'cashito') tab = 'hoy';
   if (v === 'comidita') { tabc = 'hoy'; setTimeout(autoSync, 50); }
-  filt = 'todos'; cat = null; cerrarDw(); close(); render(); window.scrollTo(0, 0);
+  filt = 'todos'; cat = null; cerrarDw(); render(); window.scrollTo(0, 0);
 }
 function cerrarDw() {
   $('dw').classList.remove('open');
@@ -226,11 +227,27 @@ function toast(m, fn, err) {
   clearTimeout(tmr); tmr = setTimeout(() => t.classList.remove('show'), fn ? 5000 : 3200);
 }
 const fallo = e => { console.error(e); toast(e.message || 'Algo falló', null, true); };
-function sheet(title, body) {
-  $('mo').innerHTML = `<div class="ov"><div class="sheet">
+/* Los paneles se apilan: abrir uno desde otro no destruye el de abajo.
+   Cerrar vuelve al anterior, no al fondo. */
+function sheet(title, body, apilar) {
+  const html = `<div class="ov"><div class="sheet">
     <div class="sh-h"><b>${title}</b><button data-act="cerrar" aria-label="Cerrar">×</button></div>${body}</div></div>`;
+  const mo = $('mo');
+  if (apilar) {
+    const prev = mo.querySelector('.ov:last-child');
+    if (prev) prev.classList.add('bajo');
+    mo.insertAdjacentHTML('beforeend', html);
+  } else mo.innerHTML = html;
 }
-const close = () => { $('mo').innerHTML = ''; };
+function close() {
+  const mo = $('mo'), ovs = mo.querySelectorAll('.ov');
+  if (ovs.length > 1) {
+    ovs[ovs.length - 1].remove();
+    const ahora = mo.querySelector('.ov:last-child');
+    if (ahora) ahora.classList.remove('bajo');
+  } else mo.innerHTML = '';
+}
+const closeAll = () => { $('mo').innerHTML = ''; };
 
 /* ══ vistas ══ */
 function vHome() {
@@ -1568,7 +1585,7 @@ function actualizaMacrosForm() {
    no queda un ingrediente en blanco. */
 function pickIngrediente() {
   window._iq = '';
-  sheet('Añadir ingrediente', `<div id="ingbox"></div>`);
+  sheet('Añadir ingrediente', `<div id="ingbox"></div>`, true);
   pintaPickIng();
   setTimeout(() => { const i = $('iq'); if (i) i.focus(); }, 60);
 }
@@ -1594,8 +1611,8 @@ function elegirIng(id) {
   if (!a) return;
   // Si ya está en la receta, se suma la ración en vez de duplicar la línea
   const ya = window._ings.find(x => x.alimento_id === a.id);
-  if (ya) ya.cantidad = (+ya.cantidad || 0) + (+a.porcion || 100);
-  else window._ings.push({ cantidad: +a.porcion || 100, unidad: a.unidad,
+  if (ya) ya.cantidad = (+ya.cantidad || 0) + 100;
+  else window._ings.push({ cantidad: 100, unidad: a.unidad,
                            nombre: a.nombre, nota: '', alimento_id: a.id });
   window._iq = '';
   close(); pintaIngs();
@@ -1606,30 +1623,28 @@ function crearAlimentoRapido(destino) {
   window._destAli = destino;   // 'ing' | 'plan'
   sheet('Nuevo alimento', `
   <div class="fg"><label>Nombre</label><input id="qa" value="${esc(window._iq || window._pq || '')}"></div>
-  <div class="fl"><div class="fg" style="width:96px"><label>Unidad</label><select id="qu">
-      <option value="g">g</option><option value="ml">ml</option><option value="u">unidad</option></select></div>
-    <div class="fg grow"><label>Ración habitual</label>
-      <input id="qp" type="number" inputmode="decimal" class="mono" placeholder="100"></div></div>
-  <div class="t2 mb">Valores por 100 g o 100 ml. Míralos en el envase.</div>
+  <div class="fg"><label>Medida</label><select id="qu">
+      <option value="g">por 100 g</option><option value="ml">por 100 ml</option>
+      <option value="u">por unidad</option></select></div>
+  <div class="t2 mb">Los valores del envase, por 100 g o 100 ml.</div>
   <div class="fl"><div class="fg grow"><label>Calorías</label>
       <input id="qk" type="number" step="0.1" inputmode="decimal" class="mono" placeholder="165"></div>
     <div class="fg grow"><label>Proteína g</label>
       <input id="qpr" type="number" step="0.1" inputmode="decimal" class="mono" placeholder="30"></div></div>
-  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:8px" data-act="ali-rapido-save">Crear y usar</button>`);
+  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:8px" data-act="ali-rapido-save">Crear y usar</button>`, true);
   setTimeout(() => $('qa').focus(), 60);
 }
 async function guardarAlimentoRapido() {
   const nombre = val('qa'); if (!nombre) return $('qa').focus();
   try {
     const a = await api.addAlimento({ nombre, unidad: val('qu'),
-      kcal: parseFloat(val('qk')) || 0, proteina: parseFloat(val('qpr')) || 0,
-      porcion: parseFloat(val('qp')) || null });
+      kcal: parseFloat(val('qk')) || 0, proteina: parseFloat(val('qpr')) || 0 });
     D.alimentos.push(a);
     D.alimentos.sort((x, y) => x.nombre.localeCompare(y.nombre, 'es'));
     close();
     if (window._destAli === 'ing') { elegirIng(a.id); return; }
-    else { piSel = { t: 'a', id: a.id, n: a.nombre, u: a.unidad, p: a.porcion };
-      await guardarPI(+a.porcion || 100); }
+    else { piSel = { t: 'a', id: a.id, n: a.nombre, u: a.unidad };
+      await guardarPI(a.unidad === 'u' ? 1 : 100); }
     toast('Alimento creado');
   } catch (e) { fallo(e); }
 }
@@ -2028,7 +2043,7 @@ function pintaPicker() {
     }).join('')}</div>` : '<div class="empty">Sin recetas. Créalas en Chefcito.</div>')
   : (alis.length ? `<div class="card">${alis.map(a => `<button class="row tap" style="width:100%;text-align:left" data-pipick="a:${a.id}">
       <div class="grow"><div class="t1">${esc(a.nombre)}</div>
-        <div class="t2">por 100 ${esc(a.unidad)}${a.porcion ? ' · ración ' + fmtCant(+a.porcion) : ''}</div></div>
+        <div class="t2">${a.unidad === 'u' ? 'por unidad' : 'por 100 ' + esc(a.unidad)}</div></div>
       <div style="text-align:right"><div class="amt">${Math.round(a.kcal)}</div>
         <div class="t2 mono" style="color:var(--cash)">${(+a.proteina).toFixed(1)} g</div></div></button>`).join('')}</div>`
     : '<div class="empty">Sin resultados.</div>')}
@@ -2043,8 +2058,8 @@ async function elegirPI(tok) {
   const [t, id] = tok.split(':');
   let cant;
   if (t === 'r') { const r = D.recetas.find(x => x.id === +id); piSel = { t, id: +id, n: r.titulo, u: 'porciones' }; cant = 1; }
-  else { const a = D.alimentos.find(x => x.id === +id); piSel = { t, id: +id, n: a.nombre, u: a.unidad, p: a.porcion };
-    cant = +a.porcion || 100; }
+  else { const a = D.alimentos.find(x => x.id === +id); piSel = { t, id: +id, n: a.nombre, u: a.unidad };
+    cant = a.unidad === 'u' ? 1 : 100; }
   await guardarPI(cant);
 }
 async function guardarPI(cant) {
@@ -2344,6 +2359,9 @@ function copiarCompra() {
 
 let ordAli = 'nombre', ascAli = true, qAli = '';
 
+/* Tabla editable: los valores se cambian en su celda sin abrir nada.
+   El precio no vive aquí — depende de la cantidad que compres, así que
+   se registra en la lista de compra. */
 function cAlim() {
   let l = D.alimentos.filter(a => a.nombre.toLowerCase().includes(qAli.toLowerCase()));
   l.sort((a, b) => {
@@ -2357,33 +2375,61 @@ function cAlim() {
 
   return `<div class="fl mb">
     <input id="qali" placeholder="Buscar alimento…" value="${esc(qAli)}" autocomplete="off" style="flex:1">
-    <button class="btn" style="background:var(--comi);color:#05231A" data-act="alim-nuevo">+</button></div>
+    <button class="btn" style="background:var(--comi);color:#05231A" data-act="alim-nuevo">+ Nuevo</button></div>
 
   <div class="tbl">
     <div class="trow thead">
       ${col('nombre', 'Alimento', 'flex:1;text-align:left')}
-      ${col('kcal', 'kcal', 'width:52px')}
-      ${col('proteina', 'prot', 'width:46px')}
-      ${col('precio', '€', 'width:52px')}
-      <span style="width:30px"></span></div>
+      ${col('kcal', 'kcal', 'width:58px')}
+      ${col('proteina', 'prot g', 'width:54px')}
+      <span class="th" style="width:46px">por</span>
+      <span style="width:26px"></span></div>
 
     ${l.length ? l.map(a => `<div class="trow">
-      <div class="tc grow" style="text-align:left;min-width:0">
-        <div class="tnm">${esc(a.nombre)}</div>
-        <div class="tsub">por 100 ${esc(a.unidad)}${a.porcion ? ' · ración ' + fmtCant(+a.porcion) : ''}</div></div>
-      <div class="tc mono" style="width:52px">${Math.round(a.kcal) || '—'}</div>
-      <div class="tc mono" style="width:46px;color:var(--cash)">${+a.proteina ? (+a.proteina).toFixed(1) : '—'}</div>
-      <div class="tc mono" style="width:52px;font-size:10.5px;color:${a.precio ? 'var(--comi)' : 'var(--tx3)'}">
-        ${a.precio ? (+a.precio).toFixed(2) : '—'}</div>
-      <button class="tedit" data-alim="${a.id}" aria-label="Editar ${esc(a.nombre)}">✎</button></div>`).join('')
+      <input class="ted tnom" value="${esc(a.nombre)}" data-af="${a.id}:nombre">
+      <input class="ted mono" style="width:58px" inputmode="decimal" value="${+a.kcal || ''}" placeholder="0" data-af="${a.id}:kcal">
+      <input class="ted mono" style="width:54px;color:var(--cash)" inputmode="decimal" value="${+a.proteina || ''}" placeholder="0" data-af="${a.id}:proteina">
+      <select class="ted tsel" style="width:46px" data-af="${a.id}:unidad">
+        <option value="g" ${a.unidad === 'g' ? 'selected' : ''}>100g</option>
+        <option value="ml" ${a.unidad === 'ml' ? 'selected' : ''}>100ml</option>
+        <option value="u" ${a.unidad === 'u' ? 'selected' : ''}>ud</option></select>
+      <button class="tdel" data-alidel="${a.id}" aria-label="Eliminar ${esc(a.nombre)}">×</button></div>`).join('')
       : '<div class="empty">Sin resultados.</div>'}</div>
 
-  <div class="t2" style="margin-top:10px;text-align:center">${D.alimentos.length} alimentos · el precio es el de tu última compra</div>`;
+  <div class="t2" style="margin-top:10px;text-align:center">
+    ${D.alimentos.length} alimentos · toca una celda para editarla</div>`;
+}
+
+/* Guarda con retardo para no escribir en cada tecla */
+const guardaAli = {};
+function editarAli(tok, valor) {
+  const [id, campo] = tok.split(':');
+  const a = D.alimentos.find(x => x.id === +id);
+  if (!a) return;
+  const v = campo === 'nombre' || campo === 'unidad' ? valor : (valor === '' ? 0 : parseFloat(valor.replace(',', '.')));
+  if (campo !== 'nombre' && campo !== 'unidad' && isNaN(v)) return;
+  if (campo === 'nombre' && !valor.trim()) return;
+  a[campo] = v;
+  clearTimeout(guardaAli[tok]);
+  guardaAli[tok] = setTimeout(async () => {
+    try { await api.editAlimento(+id, { [campo]: v }); } catch (e) { fallo(e); }
+  }, 600);
+}
+async function borrarAliFila(id) {
+  const a = D.alimentos.find(x => x.id === id);
+  const usado = D.recetas.some(r => (r.ings || []).some(i => i.alimento_id === id));
+  if (usado && !confirm(`${a.nombre} se usa en alguna receta. ¿Eliminarlo igual?`)) return;
+  try {
+    await api.delAlimento(id);
+    D.alimentos = D.alimentos.filter(x => x.id !== id);
+    toast(`${a.nombre} eliminado`);
+    render();
+  } catch (e) { fallo(e); }
 }
 
 /* ── registrar una comida ── */
 function formComer(pre, momId) {
-  const opciones = [...D.alimentos.map(a => ({ t: 'a', id: a.id, n: a.nombre, u: a.unidad, p: a.porcion })),
+  const opciones = [...D.alimentos.map(a => ({ t: 'a', id: a.id, n: a.nombre, u: a.unidad })),
                     ...D.recetas.filter(r => r.kcal).map(r => ({ t: 'r', id: r.id, n: r.titulo, u: 'porciones', p: 1 }))];
   window._sel = pre || null;
   sheet('Registrar comida', `
@@ -2410,7 +2456,7 @@ function elegirComida(tok) {
   window._sel = o;
   $('cq').value = o.n;
   $('csug').innerHTML = '';
-  const def = o.p || (t === 'r' ? 1 : 100);
+  const def = t === 'r' ? 1 : 100;
   $('cdet').innerHTML = `
     <div class="fg"><label>Cantidad ${t === 'r' ? '(porciones)' : '(' + esc(o.u) + ')'}</label>
       <input id="cc" type="number" step="${t === 'r' ? '0.5' : '1'}" inputmode="decimal" class="mono" value="${def}"></div>
@@ -2462,19 +2508,14 @@ function formAlimento(id) {
   const a = id ? D.alimentos.find(x => x.id === id) : null;
   sheet(a ? 'Editar alimento' : 'Nuevo alimento', `
   <div class="fg"><label>Nombre</label><input id="an2" placeholder="Pollo deshilachado" value="${a ? esc(a.nombre) : ''}"></div>
-  <div class="fl"><div class="fg" style="width:96px"><label>Unidad</label><select id="au">
-      <option value="g" ${a && a.unidad === 'g' ? 'selected' : ''}>g</option>
-      <option value="ml" ${a && a.unidad === 'ml' ? 'selected' : ''}>ml</option>
-      <option value="u" ${a && a.unidad === 'u' ? 'selected' : ''}>unidad</option></select></div>
-    <div class="fg grow"><label>Ración habitual</label>
-      <input id="ap" type="number" inputmode="decimal" class="mono" placeholder="120" value="${a ? (a.porcion || '') : ''}"></div></div>
-  <div class="t2 mb">Valores por 100 g o 100 ml. Si la unidad es «unidad», por pieza.</div>
+  <div class="fg"><label>Medida</label><select id="au">
+      <option value="g" ${!a || a.unidad === 'g' ? 'selected' : ''}>por 100 g</option>
+      <option value="ml" ${a && a.unidad === 'ml' ? 'selected' : ''}>por 100 ml</option>
+      <option value="u" ${a && a.unidad === 'u' ? 'selected' : ''}>por unidad</option></select></div>
   <div class="fl"><div class="fg grow"><label>Calorías</label>
       <input id="ak" type="number" step="0.1" inputmode="decimal" class="mono" value="${a ? a.kcal : ''}"></div>
     <div class="fg grow"><label>Proteína g</label>
       <input id="apr" type="number" step="0.1" inputmode="decimal" class="mono" value="${a ? a.proteina : ''}"></div></div>
-  <div class="fg"><label>Marcas</label><div class="seg" id="segFr">
-    <button data-fr="1" class="${a && a.frecuente ? 'on' : ''}">Frecuente</button></div></div>
   <div class="fl" style="margin-top:12px">
     <button class="btn" style="flex:1;background:var(--comi);color:#05231A" data-save="alimento" data-id="${id || 0}">Guardar</button>
     ${a ? `<button class="btn btn-d" data-del="alimento" data-id="${id}">Eliminar</button>` : ''}</div>`);
@@ -2483,8 +2524,7 @@ function formAlimento(id) {
 async function saveAlimento(id) {
   const nombre = val('an2'); if (!nombre) return $('an2').focus();
   const o = { nombre, unidad: val('au'), kcal: parseFloat(val('ak')) || 0,
-              proteina: parseFloat(val('apr')) || 0,
-              porcion: parseFloat(val('ap')) || null, frecuente: !!window._fr };
+              proteina: parseFloat(val('apr')) || 0 };
   try {
     if (id) { const u = await api.editAlimento(id, o); Object.assign(D.alimentos.find(x => x.id === id), u); toast('Actualizado'); }
     else { const n = await api.addAlimento(o); D.alimentos.push(n);
@@ -2653,7 +2693,7 @@ document.addEventListener('click', async ev => {
   if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
   if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
 
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom],[data-piadd2],[data-copiadia],[data-ord]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom],[data-piadd2],[data-copiadia],[data-ord],[data-alidel]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -2710,6 +2750,7 @@ document.addEventListener('click', async ev => {
   if (d.copiadia) { diaEd = +d.copiadia; return copiarDia(); }
   if (d.ord) { if (ordAli === d.ord) ascAli = !ascAli; else { ordAli = d.ord; ascAli = d.ord === 'nombre'; }
     return render(); }
+  if (d.alidel) return borrarAliFila(+d.alidel);
   if (d.pd) { window._pd = +d.pd;
     $('segPD').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.pd === window._pd)); return; }
   if (d.rep) { window._rep = d.rep;
@@ -2832,6 +2873,7 @@ document.addEventListener('click', async ev => {
 });
 document.addEventListener('input', ev => {
   const t = ev.target;
+  if (t.dataset && t.dataset.af) { editarAli(t.dataset.af, t.value); return; }
   if (t.id === 'qali') { qAli = t.value; const p = t.selectionStart; render();
     const n = $('qali'); if (n) { n.focus(); n.setSelectionRange(p, p); } return; }
   if (t.dataset && t.dataset.pre) { precioItem(+t.dataset.pre, t.value); return; }
