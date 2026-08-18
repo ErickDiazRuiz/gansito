@@ -1809,19 +1809,34 @@ function cHoy() {
 
   ${rs.length ? moms.map(m => {
     const l = porMom[m.id], tk = l.reduce((a, r) => a + +r.kcal, 0), tp = l.reduce((a, r) => a + +r.proteina, 0);
-    return `<div class="fl" style="justify-content:space-between;align-items:baseline;margin:12px 0 6px">
-      <span class="lbl" style="margin:0">${esc(m.nombre)}</span>
-      <span class="t2 mono">${Math.round(tk)} kcal · ${Math.round(tp)} g</span></div>
-    <div class="card">${l.map(r => `<div class="row">
-      <div class="grow"><div class="t1">${esc(r.etiqueta)}</div>
-        <div class="t2">${fmtCant(+r.cantidad)}${r.receta_id ? ' porción' + (+r.cantidad > 1 ? 'es' : '') : ' g'}</div></div>
-      <div style="text-align:right"><div class="amt">${Math.round(r.kcal)}</div>
-        <div class="t2 mono" style="color:var(--cash)">${(+r.proteina).toFixed(1)} g</div></div>
-      <button class="btn btn-q" style="padding:5px 8px" data-delreg="${r.id}" aria-label="Quitar">×</button></div>`).join('')}</div>`;
+    return `<div class="msec">
+      <div class="mhead">
+        <span class="mnom">${esc(m.nombre)}</span>
+        <span class="t2 mono">${Math.round(tk)} kcal · ${Math.round(tp)} g</span>
+        <button class="madd" data-comermom="${m.id}" aria-label="Añadir a ${esc(m.nombre)}">${sv('plus', 2.4)}</button></div>
+      <div class="mgrid">${l.map(r => tarjetaRegistro(r)).join('')}</div></div>`;
   }).join('') : '<div class="empty">Nada registrado este día.</div>'}
+
+  ${rs.length ? `<div class="msec"><div class="mhead"><span class="mnom">Otro momento</span></div>
+    <div class="mgrid">${D.momentos.filter(m => !porMom[m.id]).map(m =>
+      `<button class="mvacio" style="aspect-ratio:auto;padding:16px 8px" data-comermom="${m.id}">${esc(m.nombre)}</button>`).join('')}</div></div>` : ''}
 
   <div style="text-align:center;margin-top:14px">
     <button class="btn btn-q" data-act="objetivos">Objetivos diarios</button></div>`;
+}
+
+/* Lo comido también se ve como tarjeta: la foto de la receta ayuda
+   a reconocer de un vistazo qué llevas del día. */
+function tarjetaRegistro(r) {
+  const rec = r.receta_id && D.recetas.find(x => x.id === r.receta_id);
+  return `<div class="mini-c">
+    <div class="mini-img" ${rec && rec.imagen ? `data-foto="${esc(rec.imagen)}"` : ''}>
+      ${rec && rec.imagen ? '' : `<span class="mini-ini">${esc((r.etiqueta || '?').trim()[0]).toUpperCase()}</span>`}
+      <button class="mini-x" data-delreg="${r.id}" aria-label="Quitar">×</button></div>
+    <div class="mini-b">
+      <div class="mini-t">${esc(r.etiqueta)}</div>
+      <div class="mini-q">${fmtCant(+r.cantidad)}${r.receta_id ? ' porción' + (+r.cantidad > 1 ? 'es' : '') : ' g'}</div>
+      <div class="mini-m"><span>${Math.round(r.kcal)} kcal</span><span class="pr">${(+r.proteina).toFixed(0)} g</span></div></div></div>`;
 }
 
 /* ── planes de N días ── */
@@ -2306,13 +2321,13 @@ function cAlim() {
 }
 
 /* ── registrar una comida ── */
-function formComer(pre) {
+function formComer(pre, momId) {
   const opciones = [...D.alimentos.map(a => ({ t: 'a', id: a.id, n: a.nombre, u: a.unidad, p: a.porcion })),
                     ...D.recetas.filter(r => r.kcal).map(r => ({ t: 'r', id: r.id, n: r.titulo, u: 'porciones', p: 1 }))];
   window._sel = pre || null;
   sheet('Registrar comida', `
   <div class="fg"><label>Momento</label><select id="cm">
-    ${D.momentos.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('')}</select></div>
+    ${D.momentos.map(m => `<option value="${m.id}" ${momId === m.id ? 'selected' : ''}>${esc(m.nombre)}</option>`).join('')}</select></div>
   <div class="fg"><label>Qué comiste</label>
     <input id="cq" placeholder="Escribe para buscar…" autocomplete="off">
     <div id="csug" class="sug"></div></div>
@@ -2577,7 +2592,7 @@ document.addEventListener('click', async ev => {
   if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
   if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
 
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -2628,6 +2643,7 @@ document.addEventListener('click', async ev => {
   if (d.pitab) { piTab = d.pitab; return pintaPicker(); }
   if (d.pipick) return elegirPI(d.pipick);
   if (d.ipick) return elegirIng(+d.ipick);
+  if (d.comermom) return formComer(null, +d.comermom);
   if (d.pd) { window._pd = +d.pd;
     $('segPD').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.pd === window._pd)); return; }
   if (d.rep) { window._rep = d.rep;
