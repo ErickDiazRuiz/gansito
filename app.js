@@ -1622,11 +1622,10 @@ function elegirIng(id) {
   if (!a) return;
   // Si ya está en la receta, se suma la ración en vez de duplicar la línea
   const ya = window._ings.find(x => x.alimento_id === a.id);
-  if (ya) ya.cant_med = (+ya.cant_med || 0) + 1;
-  else { const meds = medidasDe(a.id);
-    const pref = meds.find(m => m.id) || meds[0];
-    window._ings.push({ cantidad: pref.gramos, unidad: a.unidad, nombre: a.nombre, nota: '',
-                        alimento_id: a.id, medida_id: pref.id, cant_med: 1 }); }
+  if (ya) ya.cant_med = (+ya.cant_med || 0) + (ya.medida_id ? 1 : 100);
+  else window._ings.push({ cantidad: a.unidad === 'u' ? 1 : 100, unidad: a.unidad,
+                           nombre: a.nombre, nota: '', alimento_id: a.id,
+                           medida_id: 0, cant_med: a.unidad === 'u' ? 1 : 100 });
   window._iq = '';
   close(); pintaIngs();
   toast(ya ? `${a.nombre} · cantidad sumada` : `${a.nombre} añadido`);
@@ -2991,7 +2990,17 @@ document.addEventListener('input', ev => {
     const n = $('qali'); if (n) { n.focus(); n.setSelectionRange(p, p); } return; }
   if (t.dataset && t.dataset.pre) { precioItem(+t.dataset.pre, t.value); return; }
   if (t.dataset && t.dataset.ig !== undefined) {
-    window._ings[+t.dataset.ig][t.dataset.k] = t.value;
+    const x = window._ings[+t.dataset.ig];
+    if (t.dataset.k === 'medida_id') {
+      // Mantener los gramos: 100 g pasan a 0,5 si la medida son 194 g
+      const antes = aGramos(x.cant_med, x.medida_id);
+      x.medida_id = t.value;
+      const g = medGr(+t.value || null);
+      x.cant_med = +(antes / g).toFixed(g > 1 ? 2 : 0);
+      pintaIngs();
+      return;
+    }
+    x[t.dataset.k] = t.value;
     actualizaMacrosForm();
     return;
   }
