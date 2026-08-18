@@ -1637,19 +1637,33 @@ function macros(al, cant) {
   const f = al.unidad === 'u' ? cant : cant / 100;
   return { kcal: +al.kcal * f, prot: +al.proteina * f };
 }
-function totalPlan() {
-  let k = 0, p = 0;
-  D.plan.forEach(x => {
-    const al = D.alimentos.find(a => a.id === x.alimento_id);
-    if (al) { const m = macros(al, +x.cantidad); k += m.kcal; p += m.prot; }
-    const r = D.recetas.find(y => y.id === x.receta_id);
-    if (r && r.kcal) { k += +r.kcal * +x.cantidad; p += (+r.proteina || 0) * +x.cantidad; }
-  });
-  return { kcal: k, prot: p };
-}
 
 const TABSC = [['hoy', 'Hoy'], ['plan', 'Plan'], ['compra', 'Compra'], ['alim', 'Alimentos']];
 let tabc = 'hoy';
+let planEd = null;      // plan que se está editando
+let diaEd = 1;          // día visible dentro del editor
+let diasCompra = 4;
+
+const planActivo = () => D.planes.find(p => p.activo);
+/* Qué día del plan corresponde a una fecha dada */
+function diaDePlan(p, f) {
+  if (!p || !p.inicio) return null;
+  const n = dias(p.inicio, f || elDia()) + 1;
+  return n >= 1 && n <= p.dias ? n : null;
+}
+const itemsDia = (p, d) => (p.items || []).filter(i => i.dia === d);
+
+function macrosItem(x) {
+  const al = D.alimentos.find(a => a.id === x.alimento_id);
+  if (al) return { ...macros(al, +x.cantidad), nom: al.nombre, u: al.unidad };
+  const r = D.recetas.find(y => y.id === x.receta_id);
+  if (r) return { kcal: (+r.kcal || 0) * +x.cantidad, prot: (+r.proteina || 0) * +x.cantidad,
+                  nom: r.titulo, u: 'porciones' };
+  return { kcal: 0, prot: 0, nom: '—', u: '' };
+}
+const totalDia = (p, d) => itemsDia(p, d).reduce((a, x) => {
+  const m = macrosItem(x); return { kcal: a.kcal + m.kcal, prot: a.prot + m.prot };
+}, { kcal: 0, prot: 0 });
 
 function vComidita() {
   return `<div class="view">
@@ -1665,6 +1679,7 @@ function cHoy() {
   const pk = Math.min(100, t.kcal / (+o.kcal || 1) * 100);
   const pp = Math.min(100, t.prot / (+o.proteina || 1) * 100);
   const faltaK = +o.kcal - t.kcal, faltaP = +o.proteina - t.prot;
+  const p = planActivo(), nd = diaDePlan(p, f);
   const porMom = {};
   rs.forEach(r => { (porMom[r.momento_id ?? 0] ??= []).push(r); });
   const moms = [...D.momentos.filter(m => porMom[m.id]), ...(porMom[0] ? [{ id: 0, nombre: 'Sin momento' }] : [])];
@@ -1672,7 +1687,8 @@ function cHoy() {
   return `<div class="fl mb" style="align-items:center;justify-content:space-between">
     <button class="btn btn-q" style="padding:5px 10px" data-dia="-1">‹</button>
     <div style="text-align:center"><div class="t1">${f === hoy() ? 'Hoy' : fechaCorta(f)}</div>
-      <div class="t2">${new Date(f + 'T12:00').toLocaleDateString('es-ES', { weekday: 'long' })}</div></div>
+      <div class="t2">${nd ? `${esc(p.nombre)} · día ${nd} de ${p.dias}`
+        : new Date(f + 'T12:00').toLocaleDateString('es-ES', { weekday: 'long' })}</div></div>
     <button class="btn btn-q" style="padding:5px 10px" data-dia="1" ${f >= hoy() ? 'disabled' : ''}>›</button></div>
 
   <div class="kpis">
@@ -1683,8 +1699,9 @@ function cHoy() {
       <div class="s">${faltaP > 0 ? 'faltan ' + Math.round(faltaP) + ' g' : 'objetivo cumplido'}</div>
       <div class="track" style="margin-top:6px"><i style="width:${pp}%;background:var(--cash)"></i></div></div></div>
 
-  ${D.plan.length && !rs.length ? `<button class="btn btn-q" style="width:100%;margin-bottom:10px" data-act="cargar-plan">
-    Cargar el plan del día (${Math.round(totalPlan().kcal)} kcal)</button>` : ''}
+  ${nd && !rs.length ? `<button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-bottom:10px" data-cargar="${nd}">
+    Cargar el día ${nd} · ${Math.round(totalDia(p, nd).kcal)} kcal</button>` : ''}
+  ${!p ? `<div class="card mb" style="padding:11px 13px"><div class="t2">Sin plan activo. Arma uno en la pestaña Plan y el día vendrá precargado.</div></div>` : ''}
 
   ${rs.length ? moms.map(m => {
     const l = porMom[m.id], tk = l.reduce((a, r) => a + +r.kcal, 0), tp = l.reduce((a, r) => a + +r.proteina, 0);
@@ -1703,54 +1720,214 @@ function cHoy() {
     <button class="btn btn-q" data-act="objetivos">Objetivos diarios</button></div>`;
 }
 
+/* ── planes de N días ── */
 function cPlan() {
-  const t = totalPlan(), o = D.objetivo;
-  const porMom = {};
-  D.plan.forEach(x => { (porMom[x.momento_id ?? 0] ??= []).push(x); });
-  const moms = D.momentos.filter(m => porMom[m.id]);
-  return `<div class="t2 mb">Tu día tipo. Sirve para cargarlo de golpe en el registro y para calcular la compra.</div>
-  <div class="kpis">
-    <div class="kpi"><div class="k">Total del plan</div><div class="v">${Math.round(t.kcal)}</div>
-      <div class="s">objetivo ${Math.round(o.kcal)} kcal</div></div>
-    <div class="kpi"><div class="k">Proteína</div><div class="v" style="color:var(--cash)">${Math.round(t.prot)} g</div>
-      <div class="s">objetivo ${Math.round(o.proteina)} g</div></div></div>
+  if (planEd) return editorPlan(D.planes.find(p => p.id === planEd));
+  const act = planActivo();
+  return `${act ? `<div class="lbl">Plan activo</div>
+  <div class="card mb" style="border-color:var(--comi)">${tarjetaPlan(act, true)}</div>` : ''}
 
-  ${moms.map(m => {
-    const l = porMom[m.id];
-    let tk = 0, tp = 0;
-    l.forEach(x => { const al = D.alimentos.find(a => a.id === x.alimento_id);
-      if (al) { const mm = macros(al, +x.cantidad); tk += mm.kcal; tp += mm.prot; } });
-    return `<div class="fl" style="justify-content:space-between;align-items:baseline;margin:12px 0 6px">
-      <span class="lbl" style="margin:0">${esc(m.nombre)}</span>
-      <span class="t2 mono">${Math.round(tk)} kcal · ${Math.round(tp)} g</span></div>
-    <div class="card">${l.map(x => {
-      const al = D.alimentos.find(a => a.id === x.alimento_id);
-      const r = D.recetas.find(y => y.id === x.receta_id);
-      const mm = al ? macros(al, +x.cantidad) : { kcal: (r && +r.kcal * +x.cantidad) || 0, prot: (r && +r.proteina * +x.cantidad) || 0 };
-      return `<div class="row"><div class="grow">
-        <div class="t1">${esc(al ? al.nombre : r ? r.titulo : '—')}</div>
-        <div class="t2">${fmtCant(+x.cantidad)} ${al ? esc(al.unidad) : 'porciones'}</div></div>
-        <div style="text-align:right"><div class="amt">${Math.round(mm.kcal)}</div>
-          <div class="t2 mono" style="color:var(--cash)">${mm.prot.toFixed(1)} g</div></div>
-        <button class="btn btn-q" style="padding:5px 8px" data-delplan="${x.id}" aria-label="Quitar">×</button></div>`;
-    }).join('')}</div>`;
-  }).join('')}
+  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-bottom:12px" data-act="plan-nuevo">
+    + Nuevo plan de comidas</button>
 
-  <button class="btn btn-q" style="width:100%;margin-top:12px" data-act="plan-add">+ Añadir al plan</button>`;
+  ${D.planes.filter(p => !p.activo).length ? `<div class="lbl">Guardados</div>
+  <div class="card">${D.planes.filter(p => !p.activo).map(p => tarjetaPlan(p, false)).join('')}</div>` : ''}
+  ${!D.planes.length ? '<div class="empty">Sin planes. Crea el primero.</div>' : ''}`;
+}
+function tarjetaPlan(p, activo) {
+  let k = 0;
+  for (let d = 1; d <= p.dias; d++) k += totalDia(p, d).kcal;
+  const media = p.dias ? k / p.dias : 0;
+  const nd = diaDePlan(p, hoy());
+  return `<div class="row tap" data-planed="${p.id}">
+    <div class="grow"><div class="t1">${esc(p.nombre)}</div>
+      <div class="t2">${p.dias} días · ${Math.round(media)} kcal/día${
+        activo && nd ? ' · vas por el día ' + nd : activo && p.inicio ? ' · terminado' : ''}</div></div>
+    ${activo ? `<span class="chip" style="background:var(--comi-bg);color:var(--comi)">activo</span>` : ''}</div>`;
 }
 
-/* La compra sale del plan: alimentos sueltos + ingredientes de las recetas
-   planificadas, todo convertido a cantidad diaria × días. */
-let diasCompra = 4;
+function editorPlan(p) {
+  if (!p) { planEd = null; return cPlan(); }
+  if (diaEd > p.dias) diaEd = 1;
+  const l = itemsDia(p, diaEd), t = totalDia(p, diaEd), o = D.objetivo;
+  const porMom = {};
+  l.forEach(x => { (porMom[x.momento_id ?? 0] ??= []).push(x); });
+  const moms = [...D.momentos.filter(m => porMom[m.id]), ...(porMom[0] ? [{ id: 0, nombre: 'Sin momento' }] : [])];
 
-function necesidades() {
+  return `<div class="fl mb" style="align-items:center">
+    <button class="btn btn-q" style="padding:5px 10px" data-act="plan-volver">‹</button>
+    <div class="grow" style="text-align:center"><div class="t1">${esc(p.nombre)}</div>
+      <div class="t2">${p.dias} días</div></div>
+    <button class="btn btn-q" style="padding:5px 10px" data-act="plan-ajustes">···</button></div>
+
+  <div class="ptabs" style="overflow-x:auto">${Array.from({ length: p.dias }, (_, i) => i + 1).map(d =>
+    `<button class="ptab ${diaEd === d ? 'on' : ''}" data-diaed="${d}" style="flex:none;min-width:44px">${d}</button>`).join('')}</div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="k">Día ${diaEd}</div><div class="v">${Math.round(t.kcal)}</div>
+      <div class="s">objetivo ${Math.round(o.kcal)} kcal</div>
+      <div class="track" style="margin-top:6px"><i style="width:${Math.min(100, t.kcal / (+o.kcal || 1) * 100)}%;background:var(--comi)"></i></div></div>
+    <div class="kpi"><div class="k">Proteína</div><div class="v" style="color:var(--cash)">${Math.round(t.prot)} g</div>
+      <div class="s">objetivo ${Math.round(o.proteina)} g</div>
+      <div class="track" style="margin-top:6px"><i style="width:${Math.min(100, t.prot / (+o.proteina || 1) * 100)}%;background:var(--cash)"></i></div></div></div>
+
+  ${moms.map(m => {
+    const li = porMom[m.id];
+    return `<div class="lbl" style="margin-top:12px">${esc(m.nombre)}</div>
+    <div class="card">${li.map(x => { const mm = macrosItem(x);
+      return `<div class="row"><div class="grow"><div class="t1">${esc(mm.nom)}</div>
+        <div class="t2">${fmtCant(+x.cantidad)} ${esc(mm.u)}</div></div>
+        <div style="text-align:right"><div class="amt">${Math.round(mm.kcal)}</div>
+          <div class="t2 mono" style="color:var(--cash)">${mm.prot.toFixed(1)} g</div></div>
+        <button class="btn btn-q" style="padding:5px 8px" data-delpi="${x.id}" aria-label="Quitar">×</button></div>`;
+    }).join('')}</div>`;
+  }).join('') || '<div class="empty">Día vacío. Añade comidas abajo.</div>'}
+
+  <button class="btn btn-q" style="width:100%;margin-top:12px" data-act="pi-add">+ Añadir al día ${diaEd}</button>
+  ${diaEd > 1 ? `<button class="btn btn-q" style="width:100%;margin-top:6px" data-act="copiar-dia">Copiar el día ${diaEd - 1} aquí</button>` : ''}
+
+  <div class="fl" style="margin-top:14px">
+    ${p.activo ? `<button class="btn btn-q" style="flex:1" data-act="plan-desactivar">Desactivar</button>`
+      : `<button class="btn" style="flex:1;background:var(--comi);color:#05231A" data-act="plan-activar">Activar desde hoy</button>`}
+    <button class="btn btn-q" data-act="ir-compra">Compra</button></div>`;
+}
+
+async function nuevoPlan() {
+  sheet('Nuevo plan', `
+  <div class="fg"><label>Nombre</label><input id="pn" placeholder="Semana del 18" value=""></div>
+  <div class="fg"><label>Duración</label><div class="seg" id="segPD">
+    ${[3, 4, 5, 7, 14].map(n => `<button data-pd="${n}" class="${n === 4 ? 'on' : ''}">${n} d</button>`).join('')}</div></div>
+  <div class="t2">Luego eliges qué comes cada día, del recetario o del catálogo de alimentos.</div>
+  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:12px" data-act="plan-crear">Crear</button>`);
+  window._pd = 4;
+}
+async function crearPlan() {
+  try {
+    const p = await api.addPlanC({ nombre: val('pn') || `Plan de ${window._pd} días`, dias: window._pd || 4 });
+    D.planes.unshift({ ...p, items: [] });
+    planEd = p.id; diaEd = 1;
+    toast('Plan creado'); close(); render();
+  } catch (e) { fallo(e); }
+}
+function ajustesPlan() {
+  const p = D.planes.find(x => x.id === planEd);
+  sheet('Ajustes del plan', `
+  <div class="fg"><label>Nombre</label><input id="pn2" value="${esc(p.nombre)}"></div>
+  <div class="fg"><label>Duración</label><div class="seg" id="segPD">
+    ${[3, 4, 5, 7, 14].map(n => `<button data-pd="${n}" class="${n === p.dias ? 'on' : ''}">${n} d</button>`).join('')}</div>
+    <div class="t2" style="margin-top:4px">Al reducir los días se borra lo planificado en los días sobrantes.</div></div>
+  <div class="fl" style="margin-top:12px">
+    <button class="btn" style="flex:1;background:var(--comi);color:#05231A" data-act="plan-guardar">Guardar</button>
+    <button class="btn btn-d" data-act="plan-borrar">Eliminar</button></div>`);
+  window._pd = p.dias;
+}
+async function guardarPlan() {
+  const p = D.planes.find(x => x.id === planEd);
+  try {
+    if (window._pd < p.dias) {
+      for (const i of p.items.filter(x => x.dia > window._pd)) await api.delPlanItem(i.id);
+      p.items = p.items.filter(x => x.dia <= window._pd);
+    }
+    const u = await api.editPlanC(p.id, { nombre: val('pn2') || p.nombre, dias: window._pd });
+    Object.assign(p, u); diaEd = Math.min(diaEd, p.dias);
+    toast('Plan actualizado'); close(); render();
+  } catch (e) { fallo(e); }
+}
+async function borrarPlan2() {
+  try { await api.delPlanC(planEd); D.planes = D.planes.filter(p => p.id !== planEd);
+    planEd = null; toast('Plan eliminado'); close(); render(); } catch (e) { fallo(e); }
+}
+async function activarPlan(on) {
+  const p = D.planes.find(x => x.id === planEd);
+  try {
+    for (const o of D.planes.filter(x => x.activo && x.id !== p.id)) {
+      const u = await api.editPlanC(o.id, { activo: false }); Object.assign(o, u);
+    }
+    const u = await api.editPlanC(p.id, on ? { activo: true, inicio: hoy() } : { activo: false });
+    Object.assign(p, u);
+    toast(on ? `Plan activo desde hoy, ${p.dias} días` : 'Plan desactivado');
+    render();
+  } catch (e) { fallo(e); }
+}
+function formPlanItem() {
+  window._ops = [...D.recetas.map(r => ({ t: 'r', id: r.id, n: r.titulo, u: 'porciones', p: 1 })),
+                 ...D.alimentos.map(a => ({ t: 'a', id: a.id, n: a.nombre, u: a.unidad, p: a.porcion }))];
+  sheet(`Añadir al día ${diaEd}`, `
+  <div class="fg"><label>Momento</label><select id="pm">
+    ${D.momentos.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('')}</select></div>
+  <div class="fg"><label>Qué</label><select id="pa">
+    <optgroup label="Recetas">${D.recetas.map(r => `<option value="r:${r.id}">${esc(r.titulo)}</option>`).join('')}</optgroup>
+    <optgroup label="Alimentos">${D.alimentos.map(a => `<option value="a:${a.id}">${esc(a.nombre)}</option>`).join('')}</optgroup>
+  </select></div>
+  <div class="fg"><label>Cantidad</label>
+    <input id="pc" type="number" step="0.5" inputmode="decimal" class="mono" value="1">
+    <div class="t2" style="margin-top:4px">Porciones para recetas, gramos para alimentos.</div></div>
+  <div class="fg"><label>Repetir</label><div class="seg" id="segRep">
+    <button data-rep="1" class="on">Solo este día</button>
+    <button data-rep="all">Todos los días</button></div></div>
+  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:10px" data-act="pi-save">Añadir</button>`);
+  window._rep = '1';
+  $('pa').onchange = () => { const [t] = $('pa').value.split(':'); $('pc').value = t === 'r' ? 1 : 100; };
+  $('pa').dispatchEvent(new Event('change'));
+}
+async function savePlanItem() {
+  const p = D.planes.find(x => x.id === planEd);
+  const [t, id] = val('pa').split(':');
+  const c = parseFloat(val('pc')); if (!c) return;
+  const base = { plan_id: p.id, momento_id: +val('pm') || null, cantidad: c,
+                 alimento_id: t === 'a' ? +id : null, receta_id: t === 'r' ? +id : null };
+  const dd = window._rep === 'all' ? Array.from({ length: p.dias }, (_, i) => i + 1) : [diaEd];
+  try {
+    const nuevos = await api.addPlanItems(dd.map(d => ({ ...base, dia: d, orden: p.items.length })));
+    p.items.push(...nuevos);
+    toast(dd.length > 1 ? `Añadido a los ${dd.length} días` : 'Añadido'); close(); render();
+  } catch (e) { fallo(e); }
+}
+async function borrarPlanItem(id) {
+  const p = D.planes.find(x => x.id === planEd);
+  try { await api.delPlanItem(id); p.items = p.items.filter(x => x.id !== id); render(); }
+  catch (e) { fallo(e); }
+}
+async function copiarDia() {
+  const p = D.planes.find(x => x.id === planEd);
+  const src = itemsDia(p, diaEd - 1);
+  if (!src.length) return toast('El día anterior está vacío', null, true);
+  try {
+    const nuevos = await api.addPlanItems(src.map((x, i) => ({
+      plan_id: p.id, dia: diaEd, momento_id: x.momento_id, alimento_id: x.alimento_id,
+      receta_id: x.receta_id, cantidad: x.cantidad, orden: i })));
+    p.items.push(...nuevos);
+    toast(`Copiado el día ${diaEd - 1}`); render();
+  } catch (e) { fallo(e); }
+}
+async function cargarDiaPlan(nd) {
+  const p = planActivo();
+  try {
+    const nuevos = [];
+    for (const x of itemsDia(p, nd)) {
+      const m = macrosItem(x);
+      nuevos.push(await api.addRegistro2({
+        fecha: elDia(), momento_id: x.momento_id, plan_id: p.id,
+        alimento_id: x.alimento_id, receta_id: x.receta_id,
+        etiqueta: m.nom, cantidad: +x.cantidad,
+        kcal: +m.kcal.toFixed(2), proteina: +m.prot.toFixed(2) }));
+    }
+    D.registro.unshift(...nuevos);
+    toast(`Día ${nd} cargado · ${nuevos.length} entradas`, async () => {
+      for (const n of nuevos) await api.delRegistro2(n.id);
+      D.registro = D.registro.filter(x => !nuevos.some(n => n.id === x.id));
+    });
+    render();
+  } catch (e) { fallo(e); }
+}
+
+/* ── compra: sale del plan completo ── */
+function necesidades(p) {
+  p = p || planActivo() || D.planes.find(x => x.id === planEd) || D.planes[0];
   const acc = {};
-  const add = (al, cant) => {
-    if (!al) return;
-    acc[al.id] ??= { al, dia: 0 };
-    acc[al.id].dia += cant;
-  };
-  D.plan.forEach(x => {
+  if (!p) return [];
+  const add = (al, cant) => { if (!al) return; acc[al.id] ??= { al, total: 0 }; acc[al.id].total += cant; };
+  (p.items || []).forEach(x => {
     if (x.alimento_id) add(D.alimentos.find(a => a.id === x.alimento_id), +x.cantidad);
     const r = D.recetas.find(y => y.id === x.receta_id);
     if (r) {
@@ -1761,9 +1938,8 @@ function necesidades() {
       });
     }
   });
-  return Object.values(acc).sort((a, b) => b.dia - a.dia);
+  return Object.values(acc).sort((a, b) => b.total - a.total);
 }
-/* Precio estimado: lo que pagaste la última vez, escalado a la cantidad. */
 function estimar(al, cant) {
   if (!al.precio || !al.precio_cant) return null;
   return +al.precio / +al.precio_cant * cant;
@@ -1776,31 +1952,41 @@ function cCompra() {
   const abierta = D.compras.find(c => !c.cerrada);
   if (abierta) return compraActiva(abierta);
 
-  const lista = necesidades();
-  const est = lista.reduce((a, x) => a + (estimar(x.al, x.dia * diasCompra) || 0), 0);
-  const sinPrecio = lista.filter(x => !x.al.precio).length;
+  const p = planActivo() || D.planes[0];
+  if (!p) return '<div class="empty">Arma un plan primero. La compra sale de él.</div>';
 
-  return `<div class="t2 mb">Sale del plan: alimentos sueltos más los ingredientes de las recetas planificadas.</div>
-  <div class="tabs mb">${[3, 4, 7, 14].map(n => `<button class="tab ${diasCompra === n ? 'on' : ''}" data-dc="${n}">${n} días</button>`).join('')}</div>
+  const lista = necesidades(p);
+  const est = lista.reduce((a, x) => a + (estimar(x.al, x.total) || 0), 0);
+  const sinPrecio = lista.filter(x => !x.al.precio).length;
+  const sueltas = (p.items || []).filter(x => x.receta_id &&
+    !(D.recetas.find(r => r.id === x.receta_id).ings || []).some(i => i.alimento_id)).length;
+
+  return `<div class="card mb" style="padding:11px 13px">
+    <div class="lbl" style="margin:0">Para el plan</div>
+    <div class="t1" style="margin-top:3px">${esc(p.nombre)} · ${p.dias} días</div></div>
+
   ${lista.length ? `
   <div class="kpis">
     <div class="kpi"><div class="k">Ítems</div><div class="v">${lista.length}</div>
-      <div class="s">${diasCompra} días de comida</div></div>
+      <div class="s">${p.dias} días de comida</div></div>
     <div class="kpi"><div class="k">Estimado</div><div class="v" style="color:var(--comi)">${est ? eur(est) : '—'}</div>
       <div class="s">${sinPrecio ? sinPrecio + ' sin precio aún' : 'según tus últimas compras'}</div></div></div>
 
+  ${sueltas ? `<div class="card mb" style="padding:10px 12px;border-color:var(--task)">
+    <div class="t2" style="color:var(--task)">${sueltas} receta${sueltas > 1 ? 's' : ''} del plan sin ingredientes vinculados al catálogo. No aparecen en la lista.</div></div>` : ''}
+
   <div class="card mb">${lista.map(x => {
-    const tot = x.dia * diasCompra, e = estimar(x.al, tot);
+    const e = estimar(x.al, x.total);
     return `<div class="row"><div class="grow"><div class="t1">${esc(x.al.nombre)}</div>
-      <div class="t2">${fmtCant(x.dia)} ${esc(x.al.unidad)} al día</div></div>
-      <div style="text-align:right"><div class="amt" style="color:var(--comi)">${fmtQty(tot, x.al.unidad)}</div>
+      <div class="t2">${fmtCant(x.total / p.dias)} ${esc(x.al.unidad)} al día</div></div>
+      <div style="text-align:right"><div class="amt" style="color:var(--comi)">${fmtQty(x.total, x.al.unidad)}</div>
         ${e ? `<div class="t2 mono">~${eur(e)}</div>` : ''}</div></div>`;
   }).join('')}</div>
 
   <div class="fl">
     <button class="btn" style="flex:1;background:var(--comi);color:#05231A" data-act="compra-iniciar">Ir a comprar</button>
     <button class="btn btn-q" data-act="copiar-compra">Copiar</button></div>`
-    : '<div class="empty">Define el plan primero.</div>'}
+    : '<div class="empty">El plan no tiene nada que comprar.</div>'}
 
   ${D.compras.filter(c => c.cerrada).length ? `<div class="lbl" style="margin-top:16px">Compras anteriores</div>
   <div class="card">${D.compras.filter(c => c.cerrada).slice(0, 6).map(c => `<div class="row">
@@ -1809,8 +1995,6 @@ function cCompra() {
     <div class="amt">${c.total ? eur(c.total) : '—'}</div></div>`).join('')}</div>` : ''}`;
 }
 
-/* Modo tienda: vas marcando y poniendo precios. El hint es lo que pagaste
-   la vez pasada; si no escribes nada, se usa esa estimación. */
 function compraActiva(c) {
   const marcados = c.items.filter(i => i.comprado);
   const total = marcados.reduce((a, i) => a + (+i.precio || 0), 0);
@@ -1826,18 +2010,20 @@ function compraActiva(c) {
   <div class="card mb">${c.items.map(i => {
     const al = D.alimentos.find(a => a.id === i.alimento_id);
     const hint = al ? estimar(al, +i.cantidad) : null;
+    const sinMacros = al && !+al.kcal;
     return `<div class="row${i.comprado ? ' comprado' : ''}">
       <button class="chk ${i.comprado ? 'on' : ''}" data-chk="${i.id}" role="checkbox" aria-checked="${i.comprado}">
         ${i.comprado ? `<span style="display:block;width:11px;height:11px">${sv('check', 3)}</span>` : ''}</button>
       <div class="grow"><div class="t1">${esc(i.etiqueta)}</div>
-        <div class="t2">${fmtQty(+i.cantidad, i.unidad)}</div></div>
+        <div class="t2">${fmtQty(+i.cantidad, i.unidad)}${sinMacros ? ' · sin kcal' : ''}</div></div>
+      ${sinMacros ? `<button class="btn btn-q" style="padding:5px 8px;font-size:11px" data-alim="${al.id}">kcal</button>` : ''}
       <div class="pbox"><span class="pcur">€</span>
         <input class="pin mono" inputmode="decimal" data-pre="${i.id}"
           value="${i.precio != null ? i.precio : ''}"
           placeholder="${hint ? hint.toFixed(2) : '0.00'}"></div></div>`;
   }).join('')}</div>
 
-  ${pend ? `<div class="t2 mb">${pend} sin marcar. Los que no marques no se incluyen en el gasto.</div>` : ''}
+  ${pend ? `<div class="t2 mb">${pend} sin marcar. Los que no marques no entran en el gasto.</div>` : ''}
 
   <div class="fl">
     <button class="btn" style="flex:1;background:var(--cash);color:#04241A" data-act="compra-cerrar">
@@ -1846,16 +2032,17 @@ function compraActiva(c) {
 }
 
 async function iniciarCompra() {
-  const lista = necesidades();
+  const p = planActivo() || D.planes[0];
+  const lista = necesidades(p);
   if (!lista.length) return;
   try {
-    const c = await api.addCompra({ dias: diasCompra });
+    const c = await api.addCompra({ dias: p.dias, plan_id: p.id });
     const items = await api.addItems(c.id, lista.map(x => ({
       alimento_id: x.al.id, etiqueta: x.al.nombre,
-      cantidad: +(x.dia * diasCompra).toFixed(2), unidad: x.al.unidad
+      cantidad: +x.total.toFixed(2), unidad: x.al.unidad
     })));
     D.compras.unshift({ ...c, items });
-    toast('Lista preparada. Ve marcando lo que compres.');
+    toast('Lista lista. Ve marcando lo que compres.');
     render();
   } catch (e) { fallo(e); }
 }
@@ -1864,7 +2051,6 @@ async function marcarItem(id) {
   const i = c.items.find(y => y.id === id);
   const al = D.alimentos.find(a => a.id === i.alimento_id);
   const nuevo = !i.comprado;
-  // Al marcar, si no hay precio escrito, se rellena con la estimación
   const pre = nuevo && i.precio == null && al ? estimar(al, +i.cantidad) : i.precio;
   try {
     const u = await api.editItem(id, { comprado: nuevo, precio: pre != null ? +(+pre).toFixed(2) : null });
@@ -1890,15 +2076,12 @@ async function cerrarCompra() {
   if (!marcados.length) return toast('No marcaste nada', null, true);
   const total = marcados.reduce((a, i) => a + (+i.precio || 0), 0);
   try {
-    // 1. El gasto va a Cashito
     const g = await api.addGasto({
       categoria: 'Comida', subcategoria: 'Supermercado', monto: +total.toFixed(2),
       item_nombre: `Compra ${c.dias} días`, item_tipo: 'basico',
       fecha: new Date().toISOString(), nota: `${marcados.length} ítems`
     });
     D.gastos.unshift(g); ordenarGastos();
-
-    // 2. Cada precio pagado actualiza el catálogo para la próxima vez
     for (const i of marcados) {
       if (i.precio == null || !i.alimento_id) continue;
       const al = D.alimentos.find(a => a.id === i.alimento_id);
@@ -1907,7 +2090,6 @@ async function cerrarCompra() {
         precio: +i.precio, precio_cant: +i.cantidad, precio_fecha: hoy() });
       Object.assign(al, u);
     }
-
     const u = await api.editCompra(c.id, { cerrada: true, total: +total.toFixed(2), gasto_id: g.id });
     Object.assign(c, u);
     toast(`Compra guardada · ${eur(total)} en Cashito`);
@@ -1920,8 +2102,9 @@ async function cancelarCompra() {
     toast('Compra cancelada'); render(); } catch (e) { fallo(e); }
 }
 function copiarCompra() {
-  const txt = necesidades().map(x => `${x.al.nombre}: ${fmtQty(x.dia * diasCompra, x.al.unidad)}`).join('\n');
-  navigator.clipboard.writeText(`Compra ${diasCompra} días\n\n${txt}`)
+  const p = planActivo() || D.planes[0];
+  const txt = necesidades(p).map(x => `${x.al.nombre}: ${fmtQty(x.total, x.al.unidad)}`).join('\n');
+  navigator.clipboard.writeText(`Compra · ${p.nombre} (${p.dias} días)\n\n${txt}`)
     .then(() => toast('Lista copiada')).catch(() => toast('No se pudo copiar', null, true));
 }
 
@@ -2015,28 +2198,6 @@ async function borrarReg(id) {
       const n = await api.addRegistro2(c); D.registro.unshift(n); });
     render(); } catch (e) { fallo(e); }
 }
-async function cargarPlan() {
-  try {
-    const nuevos = [];
-    for (const x of D.plan) {
-      const al = D.alimentos.find(a => a.id === x.alimento_id);
-      const r = D.recetas.find(y => y.id === x.receta_id);
-      if (!al && !r) continue;
-      const m = al ? macros(al, +x.cantidad) : { kcal: +r.kcal * +x.cantidad, prot: (+r.proteina || 0) * +x.cantidad };
-      nuevos.push(await api.addRegistro2({
-        fecha: elDia(), momento_id: x.momento_id,
-        alimento_id: al ? al.id : null, receta_id: r ? r.id : null,
-        etiqueta: al ? al.nombre : r.titulo, cantidad: +x.cantidad,
-        kcal: +m.kcal.toFixed(2), proteina: +m.prot.toFixed(2) }));
-    }
-    D.registro.unshift(...nuevos);
-    toast(`Plan cargado · ${nuevos.length} entradas`, async () => {
-      for (const n of nuevos) await api.delRegistro2(n.id);
-      D.registro = D.registro.filter(x => !nuevos.some(n => n.id === x.id));
-    });
-    render();
-  } catch (e) { fallo(e); }
-}
 
 function formAlimento(id) {
   const a = id ? D.alimentos.find(x => x.id === id) : null;
@@ -2092,33 +2253,6 @@ async function saveObjetivo(id) {
   catch (e) { fallo(e); }
 }
 
-function formPlanAdd() {
-  window._ops = [...D.alimentos.map(a => ({ t: 'a', id: a.id, n: a.nombre, u: a.unidad, p: a.porcion })),
-                 ...D.recetas.filter(r => r.kcal).map(r => ({ t: 'r', id: r.id, n: r.titulo, u: 'porciones', p: 1 }))];
-  sheet('Añadir al plan', `
-  <div class="fg"><label>Momento</label><select id="pm">
-    ${D.momentos.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('')}</select></div>
-  <div class="fg"><label>Alimento</label><select id="pa">
-    ${window._ops.map(o => `<option value="${o.t}:${o.id}">${esc(o.n)}</option>`).join('')}</select></div>
-  <div class="fg"><label>Cantidad</label>
-    <input id="pc" type="number" step="0.5" inputmode="decimal" class="mono" value="100">
-    <div class="t2" style="margin-top:4px">Gramos para alimentos, porciones para recetas.</div></div>
-  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:8px" data-act="plan-save">Añadir</button>`);
-}
-async function savePlanItem() {
-  const [t, id] = val('pa').split(':');
-  const c = parseFloat(val('pc')); if (!c) return;
-  try {
-    const n = await api.addPlan2({ momento_id: +val('pm'), cantidad: c,
-      alimento_id: t === 'a' ? +id : null, receta_id: t === 'r' ? +id : null,
-      orden: D.plan.length + 1 });
-    D.plan.push(n); toast('Añadido al plan'); close(); render();
-  } catch (e) { fallo(e); }
-}
-async function borrarPlanItem(id) {
-  try { await api.delPlan2(id); D.plan = D.plan.filter(x => x.id !== id); toast('Quitado del plan'); render(); }
-  catch (e) { fallo(e); }
-}
 /* ── plansito ── */
 function vPlansito() {
   const l = filt === 'todos' ? D.planes : D.planes.filter(p => p.estado === filt);
@@ -2260,7 +2394,7 @@ document.addEventListener('click', async ev => {
   if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
   if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
 
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-recplan]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -2303,6 +2437,14 @@ document.addEventListener('click', async ev => {
   if (d.delplan) return borrarPlanItem(+d.delplan);
   if (d.pick) return elegirComida(d.pick);
   if (d.chk) return marcarItem(+d.chk);
+  if (d.planed) { planEd = +d.planed; diaEd = 1; return render(); }
+  if (d.diaed) { diaEd = +d.diaed; return render(); }
+  if (d.delpi) return borrarPlanItem(+d.delpi);
+  if (d.cargar) return cargarDiaPlan(+d.cargar);
+  if (d.pd) { window._pd = +d.pd;
+    $('segPD').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.pd === window._pd)); return; }
+  if (d.rep) { window._rep = d.rep;
+    $('segRep').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.rep === d.rep)); return; }
   if (d.fr) { window._fr = !window._fr; el.classList.toggle('on', window._fr); return; }
   if (d.ingdel) {
     window._ings.splice(+d.ingdel, 1);
@@ -2393,11 +2535,20 @@ document.addEventListener('click', async ev => {
     case 'cats': return formCats();
     case 'comer': return formComer();
     case 'comer-save': return guardarComida();
-    case 'cargar-plan': return cargarPlan();
     case 'objetivos': return formObjetivos();
     case 'alim-nuevo': return formAlimento();
-    case 'plan-add': return formPlanAdd();
-    case 'plan-save': return savePlanItem();
+    case 'plan-nuevo': return nuevoPlan();
+    case 'plan-crear': return crearPlan();
+    case 'plan-volver': planEd = null; return render();
+    case 'plan-ajustes': return ajustesPlan();
+    case 'plan-guardar': return guardarPlan();
+    case 'plan-borrar': return borrarPlan2();
+    case 'plan-activar': return activarPlan(true);
+    case 'plan-desactivar': return activarPlan(false);
+    case 'pi-add': return formPlanItem();
+    case 'pi-save': return savePlanItem();
+    case 'copiar-dia': return copiarDia();
+    case 'ir-compra': tabc = 'compra'; planEd = null; return render();
     case 'copiar-compra': return copiarCompra();
     case 'compra-iniciar': return iniciarCompra();
     case 'compra-cerrar': return cerrarCompra();
@@ -2446,7 +2597,7 @@ function render() {
   crumb(); drawer();
   if (view === 'gansirato') pintaPush();
   if (view === 'chefcito' || view === 'receta') pintarFotos();
-  if (view !== 'comidita') dia = null;
+  if (view !== 'comidita') { dia = null; planEd = null; }
   if (view === 'cashito' && tab === 'analisis') requestAnimationFrame(() => { donut(); line(); });
   else if (view === 'cultivo') { if (ch1) { ch1.destroy(); ch1 = null; } requestAnimationFrame(chartMM); }
   else { if (ch1) { ch1.destroy(); ch1 = null; } if (ch2) { ch2.destroy(); ch2 = null; } }

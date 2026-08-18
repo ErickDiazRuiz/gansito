@@ -39,7 +39,7 @@ export async function cargarTodo() {
   const [gastos, ingresos, fijos, items, presupuestos,
          aparatos, tareas, log, consumibles, videos, planes,
          cultivos, registros, categorias, recetas, ingredientes,
-         alimentos, momentos, registro, planComidas, objetivos,
+         alimentos, momentos, registro, planes, planItems, objetivos,
          compras, compraItems] = await Promise.all([
     all(() => cash().from('gastos'), '*', { col: 'fecha', asc: false }),
     all(() => cash().from('ingresos'), '*', { col: 'fecha', asc: false }),
@@ -60,7 +60,8 @@ export async function cargarTodo() {
     all(() => comi().from('alimentos'), '*', { col: 'nombre' }),
     all(() => comi().from('momentos'), '*', { col: 'orden' }),
     all(() => comi().from('registro'), '*', { col: 'fecha', asc: false }),
-    all(() => comi().from('plan'), '*', { col: 'orden' }),
+    all(() => comi().from('planes'), '*', { col: 'created_at', asc: false }),
+    all(() => comi().from('plan_items'), '*', { col: 'orden' }),
     all(() => comi().from('objetivos'), '*'),
     all(() => comi().from('compras'), '*', { col: 'fecha', asc: false }),
     all(() => comi().from('compra_items'), '*', { col: 'orden' })
@@ -85,7 +86,8 @@ export async function cargarTodo() {
   recetas.forEach(r => { r.ings = ingredientes.filter(i => i.receta_id === r.id); });
 
   return { gastos, ingresos, fijos, items, presupuestos, aparatos, planes, cultivos,
-           categorias, recetas, alimentos, momentos, registro, plan: planComidas,
+           categorias, recetas, alimentos, momentos, registro,
+           planes: planes.map(p => ({ ...p, items: planItems.filter(i => i.plan_id === p.id) })),
            objetivo: objetivos[0] || { kcal: 2000, proteina: 120 },
            compras: compras.map(c => ({ ...c, items: compraItems.filter(i => i.compra_id === c.id) })) };
 }
@@ -182,8 +184,15 @@ export const setObjetivo  = (id, o) => id
   ? one(comi().from('objetivos').update(o).eq('id', id))
   : one(comi().from('objetivos').insert(o));
 
-export const addPlan2 = (p)  => one(comi().from('plan').insert(p));
-export const delPlan2 = (id) => comi().from('plan').delete().eq('id', id);
+export const addPlanC  = (p)     => one(comi().from('planes').insert(p));
+export const editPlanC = (id, p) => one(comi().from('planes').update(p).eq('id', id));
+export const delPlanC  = (id)    => comi().from('planes').delete().eq('id', id);
+export const addPlanItem = (i)   => one(comi().from('plan_items').insert(i));
+export const delPlanItem = (id)  => comi().from('plan_items').delete().eq('id', id);
+export async function addPlanItems(lista) {
+  const { data, error } = await comi().from('plan_items').insert(lista).select();
+  if (error) throw error; return data;
+}
 
 /* ── compras ── */
 export const addCompra    = (c)     => one(comi().from('compras').insert(c));

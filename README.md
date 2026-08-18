@@ -124,6 +124,10 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 
 **El catálogo de alimentos es el eje de todo.** Los ingredientes de una receta se vinculan por nombre a un alimento del catálogo, y eso es lo que cierra el circuito: la receta calcula sus propios macros sumando ingredientes, el plan sabe qué comprar cuando le añades una receta, y la lista de compra estima el precio. Un ingrediente sin vincular sigue funcionando como texto, simplemente no aporta a esos cálculos.
 
+**El flujo es: plan → compra → registro.** Armas un plan de N días eligiendo recetas del recetario y alimentos sueltos para cada día. De ahí sale la lista de compra, que descompone cada receta en sus ingredientes y suma cantidades. Al activar el plan, «Hoy» sabe qué día toca y trae un botón para precargarlo; corriges lo que haga falta.
+
+Cada día del plan es independiente: si el día 2 lleva lo mismo que el 1, es porque lo copiaste. Hay un botón para eso y otro para repetir un ítem en todos los días de golpe.
+
 **La compra es una sesión, no una lista estática.** «Ir a comprar» congela las cantidades del plan en ítems marcables. Vas tachando en la tienda y escribiendo lo que pagaste; el hueco muestra como sugerencia lo que costó la vez pasada. Al cerrarla pasan dos cosas: se crea el gasto en Cashito con el total, y cada precio pagado actualiza el catálogo para que la próxima estimación sea mejor.
 
 **La lista sale del plan**, no del historial: cantidad diaria × los días que elijas.
@@ -154,6 +158,7 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 | `db6.sql` | Chefcito: recetas, categorías y fotos. Después de `db5.sql`. |
 | `db7.sql` | Comidita: alimentos, registro, plan y compra. Después de `db6.sql`. |
 | `db8.sql` | Ingredientes vinculados, precios y compras. Después de `db7.sql`. |
+| `db9.sql` | Planes de N días con contenido por día. Después de `db8.sql`. |
 | `sw.js` | Service Worker: recibe los push con la web cerrada. |
 | `cron/avisar.mjs` | Job diario que revisa vencimientos y envía los avisos. |
 | `.github/workflows/avisos.yml` | El cron de GitHub Actions. |
