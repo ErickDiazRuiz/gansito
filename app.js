@@ -1493,6 +1493,7 @@ function formReceta(id) {
                                         cant_med: i.cant_med != null ? i.cant_med : i.cantidad }))
                    : [];
   window._foto = r ? r.imagen : null;
+  window._ovK = false; window._ovP = false;
   sheet(r ? 'Editar receta' : 'Nueva receta', `
   <div class="fg"><label>Foto</label>
     <div class="fotobox" id="fotobox" ${r && r.imagen ? `data-foto="${esc(r.imagen)}"` : ''}>
@@ -1528,9 +1529,10 @@ function formReceta(id) {
   <details class="avz"><summary>Sobrescribir macros a mano</summary>
     <div class="fl" style="margin-top:10px">
       <div class="fg grow"><label>Kcal por porción</label>
-        <input id="rk" type="number" step="1" inputmode="decimal" placeholder="auto" class="mono" value="${r ? (r.kcal || '') : ''}"></div>
+        <input id="rk" type="number" step="1" inputmode="decimal" placeholder="auto" class="mono" value=""></div>
       <div class="fg grow"><label>Proteína g</label>
-        <input id="rpr" type="number" step="0.1" inputmode="decimal" placeholder="auto" class="mono" value="${r ? (r.proteina || '') : ''}"></div></div>
+        <input id="rpr" type="number" step="0.1" inputmode="decimal" placeholder="auto" class="mono" value=""></div></div>
+    <div class="t2" style="margin-top:6px">Déjalos vacíos para usar el cálculo de arriba.</div>
   </details>
 
   <div class="fg"><label>Preparación</label>
@@ -1690,8 +1692,8 @@ async function saveReceta(id) {
     tiempo_min: parseInt(val('rmin'), 10) || null,
     preparacion: val('rprep') || null,
     notas: val('rnot') || null,
-    kcal: parseFloat(val('rk')) || (window._auto && window._auto.kcal ? +window._auto.kcal.toFixed(2) : null),
-    proteina: parseFloat(val('rpr')) || (window._auto && window._auto.prot ? +window._auto.prot.toFixed(2) : null)
+    kcal: window._ovK ? parseFloat(val('rk')) : (window._auto && window._auto.kcal ? +window._auto.kcal.toFixed(2) : parseFloat(val('rk')) || null),
+    proteina: window._ovP ? parseFloat(val('rpr')) : (window._auto && window._auto.prot ? +window._auto.prot.toFixed(2) : parseFloat(val('rpr')) || null)
   };
   const ings = window._ings
     .filter(x => (x.nombre || '').trim() && (x.alimento_id || x.cantidad))
@@ -2979,6 +2981,8 @@ document.addEventListener('input', ev => {
     return;
   }
   if (t.id === 'rp') actualizaMacrosForm();
+  if (t.id === 'rk') window._ovK = t.value !== '';
+  if (t.id === 'rpr') window._ovP = t.value !== '';
 });
 document.addEventListener('change', ev => {
   if (ev.target.id === 'fc') subOpts('fc', 'fs');
