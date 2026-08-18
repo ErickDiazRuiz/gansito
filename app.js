@@ -209,6 +209,7 @@ function crumb() {
 function go(v, a) {
   view = v; arg = a || null;
   if (v === 'cashito') tab = 'hoy';
+  if (v === 'comidita') { tabc = 'hoy'; setTimeout(autoSync, 50); }
   filt = 'todos'; cat = null; cerrarDw(); close(); render(); window.scrollTo(0, 0);
 }
 function cerrarDw() {
@@ -1742,7 +1743,7 @@ function macros(al, cant) {
   return { kcal: +al.kcal * f, prot: +al.proteina * f };
 }
 
-const TABSC = [['hoy', 'Hoy'], ['plan', 'Plan'], ['compra', 'Compra'], ['alim', 'Alimentos']];
+const TABSC = [['plan', 'Plan'], ['hoy', 'Hoy'], ['compra', 'Compra'], ['alim', 'Alimentos']];
 let tabc = 'hoy';
 let planEd = null;      // plan que se está editando
 let diaEd = 1;          // día visible dentro del editor
@@ -1803,8 +1804,9 @@ function cHoy() {
       <div class="s">${faltaP > 0 ? 'faltan ' + Math.round(faltaP) + ' g' : 'objetivo cumplido'}</div>
       <div class="track" style="margin-top:6px"><i style="width:${pp}%;background:var(--cash)"></i></div></div></div>
 
-  ${nd && !rs.length ? `<button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-bottom:10px" data-cargar="${nd}">
+  ${nd && !rs.length && itemsDia(p, nd).length ? `<button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-bottom:10px" data-cargar="${nd}">
     Cargar el día ${nd} · ${Math.round(totalDia(p, nd).kcal)} kcal</button>` : ''}
+  ${nd && rs.length && rs.some(r => r.plan_id) ? `<div class="t2 mb" style="text-align:center">Cargado del plan · corrige lo que no comiste</div>` : ''}
   ${!p ? `<div class="card mb" style="padding:11px 13px"><div class="t2">Sin plan activo. Arma uno en la pestaña Plan y el día vendrá precargado.</div></div>` : ''}
 
   ${rs.length ? moms.map(m => {
@@ -1983,7 +1985,11 @@ async function activarPlan(on) {
     }
     const u = await api.editPlanC(p.id, on ? { activo: true, inicio: hoy() } : { activo: false });
     Object.assign(p, u);
-    toast(on ? `Plan activo desde hoy, ${p.dias} días` : 'Plan desactivado');
+    if (on) {
+      planEd = null; tabc = 'hoy'; dia = null;
+      const n = await sincronizarDia();
+      toast(n ? `Plan activo · día 1 cargado en Hoy` : `Plan activo desde hoy, ${p.dias} días`);
+    } else toast('Plan desactivado');
     render();
   } catch (e) { fallo(e); }
 }
@@ -2098,6 +2104,49 @@ async function copiarDia() {
     toast(`Copiado el día ${diaEd - 1}`); render();
   } catch (e) { fallo(e); }
 }
+/* Rellena el día visible con lo que dice el plan, pero solo si está vacío
+   y no es futuro. Nunca pisa lo que ya registraste. */
+/* Envuelve la sincronización para no dispararla dos veces a la vez
+   ni molestar si no había nada que cargar. */
+let sincronizando = false;
+async function autoSync() {
+  if (sincronizando) return;
+  sincronizando = true;
+  try {
+    const n = await sincronizarDia();
+    if (n) { toast(`Día cargado del plan · ${n} entradas`, async () => {
+      const p = planActivo(), f = elDia();
+      const del = D.registro.filter(r => r.fecha === f && r.plan_id === p.id);
+      for (const r of del) await api.delRegistro2(r.id);
+      D.registro = D.registro.filter(r => !del.some(x => x.id === r.id));
+    }); render(); }
+  } catch (e) { console.error(e); }
+  sincronizando = false;
+}
+
+async function sincronizarDia() {
+  const p = planActivo();
+  if (!p) return 0;
+  const f = elDia();
+  if (f > hoy()) return 0;
+  const nd = diaDePlan(p, f);
+  if (!nd) return 0;
+  if (delDia(f).length) return 0;
+  const items = itemsDia(p, nd);
+  if (!items.length) return 0;
+  const nuevos = [];
+  for (const x of items) {
+    const m = macrosItem(x);
+    nuevos.push(await api.addRegistro2({
+      fecha: f, momento_id: x.momento_id, plan_id: p.id,
+      alimento_id: x.alimento_id, receta_id: x.receta_id,
+      etiqueta: m.nom, cantidad: +x.cantidad,
+      kcal: +m.kcal.toFixed(2), proteina: +m.prot.toFixed(2) }));
+  }
+  D.registro.unshift(...nuevos);
+  return nuevos.length;
+}
+
 async function cargarDiaPlan(nd) {
   const p = planActivo();
   try {
@@ -2626,9 +2675,10 @@ document.addEventListener('click', async ev => {
   if (d.esc) { window._escala = +d.esc; return render(); }
   if (d.fav) return toggleFav(+d.fav);
   if (d.delcat) return delCat(+d.delcat);
-  if (d.tabc) { tabc = d.tabc; return render(); }
+  if (d.tabc) { tabc = d.tabc; render();
+    if (tabc === 'hoy') autoSync(); return; }
   if (d.dia) { const x = new Date(elDia() + 'T12:00'); x.setDate(x.getDate() + (+d.dia));
-    dia = iso(x) > hoy() ? hoy() : iso(x); return render(); }
+    dia = iso(x) > hoy() ? hoy() : iso(x); render(); autoSync(); return; }
   if (d.dc) { diasCompra = +d.dc; return render(); }
   if (d.alim) return formAlimento(+d.alim);
   if (d.delreg) return borrarReg(+d.delreg);
