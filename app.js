@@ -2800,7 +2800,10 @@ document.addEventListener('click', async ev => {
     case 'despertar': return despertar();
     case 'mant': return alimentarMant();
     case 'receta-nueva': return formReceta();
-    case 'ing-add': window._ings.push({ cantidad: null, unidad: '', nombre: '', nota: '' }); return pintaIngs();
+    case 'ing-add': return pickIngrediente();
+    case 'ing-crear': return crearAlimentoRapido('ing');
+    case 'ali-rapido': return crearAlimentoRapido('plan');
+    case 'ali-rapido-save': return guardarAlimentoRapido();
     case 'cats': return formCats();
     case 'comer': return formComer();
     case 'comer-save': return guardarComida();
@@ -2814,9 +2817,6 @@ document.addEventListener('click', async ev => {
     case 'plan-borrar': return borrarPlan2();
     case 'plan-activar': return activarPlan(true);
     case 'plan-desactivar': return activarPlan(false);
-    case 'pi-add': return formPlanItem();
-    case 'pi-save': return savePlanItem();
-    case 'copiar-dia': return copiarDia();
     case 'ir-compra': tabc = 'compra'; planEd = null; return render();
     case 'copiar-compra': return copiarCompra();
     case 'compra-iniciar': return iniciarCompra();
