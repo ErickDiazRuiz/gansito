@@ -282,6 +282,11 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .ingrow2{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--sur2);
   border-radius:9px;margin-bottom:5px}
 .ingrow2 input{padding:6px 8px}
+.imed{background:var(--sur3);border:1px solid var(--bdr);border-radius:6px;padding:5px 4px;
+  font-size:10.5px;width:82px;flex:none;color:var(--tx2);-webkit-appearance:none;appearance:none}
+.imed:focus{border-color:var(--comi);outline:none}
+.medrow{display:flex;align-items:center;gap:8px;padding:6px 9px;background:var(--sur2);
+  border-radius:7px;margin-bottom:4px;font-size:12px}
 .iunit{font-size:11px;color:var(--tx3);font-family:'DM Mono',monospace;width:26px;flex:none}
 .inm{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 

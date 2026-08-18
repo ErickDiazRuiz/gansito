@@ -1397,7 +1397,11 @@ function vReceta() {
         <button data-esc="3" class="${f === 3 ? 'on' : ''}">3×</button></div></div>
     <div class="t2 mb">Para ${muestra} ${esc(r.unidad_rinde)}</div>
     ${r.ings.length ? `<div>${r.ings.map(i => `<div class="ing">
-      <span class="icant mono">${i.cantidad != null ? fmtCant(+i.cantidad * f) + (i.unidad ? ' ' + esc(i.unidad) : '') : '—'}</span>
+      <span class="icant mono">${i.cantidad != null
+        ? (i.medida_id && i.cant_med != null
+            ? fmtCant(+i.cant_med * f) + ' ' + esc(medNom(i.medida_id))
+            : fmtCant(+i.cantidad * f) + (i.unidad ? ' ' + esc(i.unidad) : ''))
+        : '—'}</span>
       <span class="inom">${esc(i.nombre)}${i.nota ? `<span class="t2"> · ${esc(i.nota)}</span>` : ''}</span></div>`).join('')}</div>`
       : '<div class="t2">Sin ingredientes.</div>'}</div>
 
@@ -1484,7 +1488,9 @@ const UNIDADES = ['g', 'kg', 'ml', 'l', 'u', 'cda', 'cdta', 'taza', 'pizca', 'di
 function formReceta(id) {
   const r = id ? D.recetas.find(x => x.id === id) : null;
   window._ings = r ? r.ings.map(i => ({ cantidad: i.cantidad, unidad: i.unidad, nombre: i.nombre,
-                                        nota: i.nota, alimento_id: i.alimento_id }))
+                                        nota: i.nota, alimento_id: i.alimento_id,
+                                        medida_id: i.medida_id || 0,
+                                        cant_med: i.cant_med != null ? i.cant_med : i.cantidad }))
                    : [];
   window._foto = r ? r.imagen : null;
   sheet(r ? 'Editar receta' : 'Nueva receta', `
@@ -1545,14 +1551,20 @@ function pintaIngs() {
   const box = $('inglist'); if (!box) return;
   box.innerHTML = window._ings.map((x, i) => {
     const al = x.alimento_id && D.alimentos.find(a => a.id === x.alimento_id);
-    const m = al && x.cantidad ? macros(al, +x.cantidad) : null;
+    const meds = al ? medidasDe(al.id) : [];
+    const g = al ? aGramos(x.cant_med, x.medida_id) : 0;
+    const m = al && g ? macros(al, g) : null;
+    const enGramos = !x.medida_id;
     return `<div class="ingrow2" data-stop="1">
-      <input class="mono" style="width:58px" inputmode="decimal" placeholder="200"
-        value="${x.cantidad ?? ''}" data-ig="${i}" data-k="cantidad">
-      <span class="iunit">${esc(al ? al.unidad : (x.unidad || 'g'))}</span>
+      <input class="mono" style="width:52px" inputmode="decimal" placeholder="1"
+        value="${x.cant_med ?? ''}" data-ig="${i}" data-k="cant_med">
+      ${al ? `<select class="imed" data-ig="${i}" data-k="medida_id">
+        ${meds.map(md => `<option value="${md.id}" ${(+x.medida_id || 0) === md.id ? 'selected' : ''}>${esc(md.nombre)}</option>`).join('')}
+      </select>` : `<span class="iunit">g</span>`}
       <div class="grow" style="min-width:0">
         <div class="inm">${esc(x.nombre || '—')}</div>
-        <div class="t2">${m ? Math.round(m.kcal) + ' kcal · ' + m.prot.toFixed(1) + ' g'
+        <div class="t2">${m ? (enGramos ? '' : fmtCant(g) + ' ' + (al.unidad === 'u' ? 'ud' : al.unidad) + ' · ')
+            + Math.round(m.kcal) + ' kcal · ' + m.prot.toFixed(1) + ' g'
           : al ? 'pon la cantidad' : 'sin vincular · no cuenta en los macros'}</div></div>
       <button class="ingdel" data-ingdel="${i}" aria-label="Quitar">×</button></div>`;
   }).join('');
@@ -1566,7 +1578,8 @@ function actualizaMacrosForm() {
   let k = 0, p = 0, sin = 0;
   window._ings.forEach(x => {
     const al = x.alimento_id && D.alimentos.find(a => a.id === x.alimento_id);
-    if (al && x.cantidad) { const m = macros(al, +x.cantidad); k += m.kcal; p += m.prot; }
+    const g = al ? aGramos(x.cant_med, x.medida_id) : 0;
+    if (al && g) { const m = macros(al, g); k += m.kcal; p += m.prot; }
     else if (x.nombre) sin++;
   });
   window._auto = { kcal: k / por, prot: p / por };
@@ -1611,9 +1624,11 @@ function elegirIng(id) {
   if (!a) return;
   // Si ya está en la receta, se suma la ración en vez de duplicar la línea
   const ya = window._ings.find(x => x.alimento_id === a.id);
-  if (ya) ya.cantidad = (+ya.cantidad || 0) + 100;
-  else window._ings.push({ cantidad: 100, unidad: a.unidad,
-                           nombre: a.nombre, nota: '', alimento_id: a.id });
+  if (ya) ya.cant_med = (+ya.cant_med || 0) + 1;
+  else { const meds = medidasDe(a.id);
+    const pref = meds.find(m => m.id) || meds[0];
+    window._ings.push({ cantidad: pref.gramos, unidad: a.unidad, nombre: a.nombre, nota: '',
+                        alimento_id: a.id, medida_id: pref.id, cant_med: 1 }); }
   window._iq = '';
   close(); pintaIngs();
   toast(ya ? `${a.nombre} · cantidad sumada` : `${a.nombre} añadido`);
@@ -1683,10 +1698,13 @@ async function saveReceta(id) {
     .map(x => {
       const nom = x.nombre.trim();
       const al = D.alimentos.find(a => a.nombre.toLowerCase() === nom.toLowerCase());
-      return { cantidad: x.cantidad === '' || x.cantidad == null ? null : parseFloat(x.cantidad),
+      const med = +x.medida_id || null;
+      const cm = x.cant_med === '' || x.cant_med == null ? null : parseFloat(x.cant_med);
+      return { cantidad: cm != null ? +(cm * medGr(med)).toFixed(2) : null,
                unidad: (x.unidad || '').trim() || null,
                nombre: nom, nota: (x.nota || '').trim() || null,
-               alimento_id: al ? al.id : null };
+               alimento_id: al ? al.id : null,
+               medida_id: med, cant_med: cm };
     });
   try {
     let r;
@@ -1758,6 +1776,31 @@ function totalHoy(f) {
 }
 /* Macros de un alimento para una cantidad dada. Los valores del catálogo
    son por 100 g/ml, así que se escala; si la unidad es 'u', es por unidad. */
+/* Medidas disponibles para un alimento: las suyas propias primero,
+   luego las genéricas. Siempre se puede usar gramos. */
+function medidasDe(alId) {
+  const al = D.alimentos.find(a => a.id === alId);
+  const base = al && al.unidad === 'u'
+    ? [{ id: 0, nombre: 'unidad', gramos: 1 }]
+    : [{ id: 0, nombre: al ? al.unidad : 'g', gramos: 1 }];
+  const propias = D.medidas.filter(m => m.alimento_id === alId);
+  const genericas = D.medidas.filter(m => !m.alimento_id
+    && !propias.some(p => p.nombre === m.nombre));
+  return [...base, ...propias, ...genericas];
+}
+const medNom = id => id ? ((D.medidas.find(m => m.id === id) || {}).nombre || '') : null;
+const medGr  = id => id ? (+(D.medidas.find(m => m.id === id) || {}).gramos || 1) : 1;
+/* Cantidad mostrada → gramos reales */
+const aGramos = (cantMed, medId) => (+cantMed || 0) * medGr(medId);
+/* Texto legible: "2 cucharadas" o "120 g" */
+function textoCant(x, unidad) {
+  if (x.medida_id && x.cant_med != null) {
+    const n = medNom(x.medida_id), c = +x.cant_med;
+    return `${fmtCant(c)} ${n}${c > 1 && !n.endsWith('s') ? 's' : ''}`;
+  }
+  return `${fmtCant(+x.cantidad)} ${unidad || 'g'}`;
+}
+
 function macros(al, cant) {
   const f = al.unidad === 'u' ? cant : cant / 100;
   return { kcal: +al.kcal * f, prot: +al.proteina * f };
@@ -1857,7 +1900,8 @@ function tarjetaRegistro(r) {
       <button class="mini-x" data-delreg="${r.id}" aria-label="Quitar">×</button></div>
     <div class="mini-b">
       <div class="mini-t">${esc(r.etiqueta)}</div>
-      <div class="mini-q">${fmtCant(+r.cantidad)}${r.receta_id ? ' porción' + (+r.cantidad > 1 ? 'es' : '') : ' g'}</div>
+      <div class="mini-q">${r.receta_id ? fmtCant(+r.cantidad) + ' porción' + (+r.cantidad > 1 ? 'es' : '')
+        : textoCant(r, (D.alimentos.find(a => a.id === r.alimento_id) || {}).unidad)}</div>
       <div class="mini-m"><span>${Math.round(r.kcal)} kcal</span><span class="pr">${(+r.proteina).toFixed(0)} g</span></div></div></div>`;
 }
 
@@ -2456,39 +2500,53 @@ function elegirComida(tok) {
   window._sel = o;
   $('cq').value = o.n;
   $('csug').innerHTML = '';
-  const def = t === 'r' ? 1 : 100;
+  const meds = t === 'a' ? medidasDe(o.id) : [];
+  const pref = meds.find(m => m.id) || meds[0];
+  window._med = t === 'a' ? (pref ? pref.id : 0) : null;
+  const def = t === 'r' ? 1 : (pref && pref.id ? 1 : 100);
   $('cdet').innerHTML = `
-    <div class="fg"><label>Cantidad ${t === 'r' ? '(porciones)' : '(' + esc(o.u) + ')'}</label>
-      <input id="cc" type="number" step="${t === 'r' ? '0.5' : '1'}" inputmode="decimal" class="mono" value="${def}"></div>
+    <div class="fl"><div class="fg" style="width:96px"><label>Cantidad</label>
+      <input id="cc" type="number" step="0.5" inputmode="decimal" class="mono" value="${def}"></div>
+      <div class="fg grow"><label>Medida</label>
+      ${t === 'r' ? `<input value="porciones" disabled>` : `<select id="cmed">
+        ${meds.map(m => `<option value="${m.id}" ${m.id === window._med ? 'selected' : ''}>${esc(m.nombre)}</option>`).join('')}
+      </select>`}</div></div>
     <div id="cprev" class="prevbox"></div>
     <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:10px" data-act="comer-save">Registrar</button>`;
   $('cc').oninput = preview;
+  if ($('cmed')) $('cmed').onchange = () => { window._med = +$('cmed').value; preview(); };
   preview();
   $('cc').select();
 }
 function preview() {
   const o = window._sel, c = parseFloat(val('cc')) || 0, box = $('cprev');
   if (!box || !o) return;
-  let m;
-  if (o.t === 'a') { const al = D.alimentos.find(a => a.id === o.id); m = macros(al, c); }
+  let m, g = 0;
+  if (o.t === 'a') { const al = D.alimentos.find(a => a.id === o.id);
+    g = c * medGr(window._med); m = macros(al, g); }
   else { const r = D.recetas.find(x => x.id === o.id); m = { kcal: +r.kcal * c, prot: (+r.proteina || 0) * c }; }
+  const al = o.t === 'a' && D.alimentos.find(a => a.id === o.id);
   box.innerHTML = `<div class="fl" style="justify-content:space-around">
     <div style="text-align:center"><div class="t2">Calorías</div>
       <div style="font-size:19px;font-weight:700;font-family:'DM Mono',monospace">${Math.round(m.kcal)}</div></div>
     <div style="text-align:center"><div class="t2">Proteína</div>
-      <div style="font-size:19px;font-weight:700;font-family:'DM Mono',monospace;color:var(--cash)">${m.prot.toFixed(1)} g</div></div></div>`;
+      <div style="font-size:19px;font-weight:700;font-family:'DM Mono',monospace;color:var(--cash)">${m.prot.toFixed(1)} g</div></div></div>
+    ${window._med && al ? `<div class="t2" style="text-align:center;margin-top:7px">equivale a ${fmtCant(g)} ${al.unidad === 'u' ? 'ud' : al.unidad}</div>` : ''}`;
 }
 async function guardarComida() {
   const o = window._sel; if (!o) return;
   const c = parseFloat(val('cc')); if (!c || c <= 0) return $('cc').focus();
   let m, campos;
-  if (o.t === 'a') { const al = D.alimentos.find(a => a.id === o.id); m = macros(al, c);
-    campos = { alimento_id: al.id, etiqueta: al.nombre }; }
+  if (o.t === 'a') { const al = D.alimentos.find(a => a.id === o.id);
+    const g = c * medGr(window._med); m = macros(al, g);
+    campos = { alimento_id: al.id, etiqueta: al.nombre,
+               medida_id: window._med || null, cant_med: window._med ? c : null }; }
   else { const r = D.recetas.find(x => x.id === o.id); m = { kcal: +r.kcal * c, prot: (+r.proteina || 0) * c };
     campos = { receta_id: r.id, etiqueta: r.titulo }; }
   try {
+    const gr = o.t === 'a' ? c * medGr(window._med) : c;
     const n = await api.addRegistro2({ ...campos, fecha: elDia(), momento_id: +val('cm') || null,
-      cantidad: c, kcal: +m.kcal.toFixed(2), proteina: +m.prot.toFixed(2) });
+      cantidad: +gr.toFixed(2), kcal: +m.kcal.toFixed(2), proteina: +m.prot.toFixed(2) });
     D.registro.unshift(n);
     toast(`${n.etiqueta} · ${Math.round(m.kcal)} kcal`, async () => {
       await api.delRegistro2(n.id); D.registro = D.registro.filter(x => x.id !== n.id);
@@ -2516,11 +2574,47 @@ function formAlimento(id) {
       <input id="ak" type="number" step="0.1" inputmode="decimal" class="mono" value="${a ? a.kcal : ''}"></div>
     <div class="fg grow"><label>Proteína g</label>
       <input id="apr" type="number" step="0.1" inputmode="decimal" class="mono" value="${a ? a.proteina : ''}"></div></div>
+  ${a ? `<div class="fg"><label>Medidas caseras</label>
+    <div id="medlist"></div>
+    <div class="fl" style="margin-top:6px">
+      <input id="mnom" placeholder="loncha, unidad…" style="flex:1">
+      <input id="mgr" type="number" inputmode="decimal" class="mono" placeholder="g" style="width:70px">
+      <button class="btn btn-q" data-medadd="${id}">+</button></div>
+    <div class="t2" style="margin-top:5px">Para escribir «2 cucharadas» en vez de pesar.</div></div>` : ''}
+
   <div class="fl" style="margin-top:12px">
     <button class="btn" style="flex:1;background:var(--comi);color:#05231A" data-save="alimento" data-id="${id || 0}">Guardar</button>
     ${a ? `<button class="btn btn-d" data-del="alimento" data-id="${id}">Eliminar</button>` : ''}</div>`);
-  window._fr = a ? a.frecuente : false;
+  if (a) pintaMedidas(a.id);
 }
+function pintaMedidas(alId) {
+  const box = $('medlist'); if (!box) return;
+  const propias = D.medidas.filter(m => m.alimento_id === alId);
+  const gen = D.medidas.filter(m => !m.alimento_id);
+  box.innerHTML = (propias.length ? propias.map(m => `<div class="medrow">
+      <span class="grow">${esc(m.nombre)}</span>
+      <span class="mono t2">${fmtCant(+m.gramos)} g</span>
+      <button class="ingdel" data-meddel="${m.id}" aria-label="Quitar">×</button></div>`).join('') : '')
+    + (gen.length ? `<div class="t2" style="margin-top:6px">Genéricas: ${gen.map(m =>
+        `${esc(m.nombre)} ${fmtCant(+m.gramos)} g`).join(' · ')}</div>` : '');
+}
+async function addMedida(alId) {
+  const n = val('mnom'), g = parseFloat(val('mgr'));
+  if (!n || !g) return;
+  try {
+    const m = await api.addMedida({ alimento_id: alId, nombre: n.toLowerCase(), gramos: g,
+                                    orden: D.medidas.filter(x => x.alimento_id === alId).length + 1 });
+    D.medidas.push(m);
+    $('mnom').value = ''; $('mgr').value = '';
+    pintaMedidas(alId);
+  } catch (e) { fallo(e); }
+}
+async function borrarMedida(id) {
+  const m = D.medidas.find(x => x.id === id);
+  try { await api.delMedida(id); D.medidas = D.medidas.filter(x => x.id !== id);
+    pintaMedidas(m.alimento_id); } catch (e) { fallo(e); }
+}
+
 async function saveAlimento(id) {
   const nombre = val('an2'); if (!nombre) return $('an2').focus();
   const o = { nombre, unidad: val('au'), kcal: parseFloat(val('ak')) || 0,
@@ -2693,7 +2787,7 @@ document.addEventListener('click', async ev => {
   if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
   if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
 
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom],[data-piadd2],[data-copiadia],[data-ord],[data-alidel]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom],[data-piadd2],[data-copiadia],[data-ord],[data-alidel],[data-medadd],[data-meddel]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -2751,6 +2845,8 @@ document.addEventListener('click', async ev => {
   if (d.ord) { if (ordAli === d.ord) ascAli = !ascAli; else { ordAli = d.ord; ascAli = d.ord === 'nombre'; }
     return render(); }
   if (d.alidel) return borrarAliFila(+d.alidel);
+  if (d.medadd) return addMedida(+d.medadd);
+  if (d.meddel) return borrarMedida(+d.meddel);
   if (d.pd) { window._pd = +d.pd;
     $('segPD').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.pd === window._pd)); return; }
   if (d.rep) { window._rep = d.rep;

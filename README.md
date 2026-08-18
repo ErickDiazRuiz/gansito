@@ -122,6 +122,12 @@ Lo que se pierde sin el bot: el resumen diario automático, el aviso de fijos de
 
 **Comidita guarda los macros ya calculados en cada registro**, no una referencia al alimento. Si mañana corriges las calorías del pollo, tu historial de la semana pasada no cambia — refleja lo que sabías cuando lo comiste. Es la diferencia entre un registro y una consulta.
 
+**Las medidas caseras separan lo que escribes de lo que se calcula.** El catálogo guarda kcal por 100 g, que es lo que dice el envase y es exacto. Pero cada alimento puede tener equivalencias propias — cucharada 15 g, loncha 18 g, unidad 53 g — y en la receta escribes «2 cucharadas»; la app convierte a gramos por debajo. Se guardan las dos cosas: la cantidad en gramos para los cálculos y la medida elegida para mostrártela como la escribiste.
+
+Hay medidas genéricas que valen para cualquier alimento (cucharada, cucharadita, taza, puñado, pizca) y propias de cada uno, que mandan sobre las genéricas. Las propias se añaden desde la ficha del alimento.
+
+Un aviso: las medidas caseras tienen ±25% de error real — una cucharada colmada puede ser 15 o 25 g. Para verduras y condimentos da igual; para el aceite, el pollo o el cereal conviene pesar.
+
 **Los ingredientes se eligen del catálogo, no se escriben.** Al añadir uno abres un buscador sobre los alimentos que ya tienes; si no está, lo creas ahí mismo con sus kcal y proteína por 100 g y queda disponible para siempre. Eso garantiza que toda receta pueda calcular sus macros, y que la lista de compra sepa qué comprar. Los macros de la receta se recalculan en vivo mientras la editas — total y por porción — y solo hace falta escribirlos a mano si quieres sobrescribirlos.
 
 **El catálogo de alimentos es el eje de todo.** Los ingredientes de una receta se vinculan por nombre a un alimento del catálogo, y eso es lo que cierra el circuito: la receta calcula sus propios macros sumando ingredientes, el plan sabe qué comprar cuando le añades una receta, y la lista de compra estima el precio. Un ingrediente sin vincular sigue funcionando como texto, simplemente no aporta a esos cálculos.
@@ -161,6 +167,7 @@ Cada día del plan es independiente: si el día 2 lleva lo mismo que el 1, es po
 | `db7.sql` | Comidita: alimentos, registro, plan y compra. Después de `db6.sql`. |
 | `db8.sql` | Ingredientes vinculados, precios y compras. Después de `db7.sql`. |
 | `db9.sql` | Planes de N días con contenido por día. Después de `db8.sql`. |
+| `db10.sql` | Medidas caseras (cucharada, loncha, unidad). Después de `db9.sql`. |
 | `sw.js` | Service Worker: recibe los push con la web cerrada. |
 | `cron/avisar.mjs` | Job diario que revisa vencimientos y envía los avisos. |
 | `.github/workflows/avisos.yml` | El cron de GitHub Actions. |

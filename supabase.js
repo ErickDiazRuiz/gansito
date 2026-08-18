@@ -63,6 +63,7 @@ export async function cargarTodo() {
     all(() => comi().from('planes'), '*', { col: 'created_at', asc: false }),
     all(() => comi().from('plan_items'), '*', { col: 'orden' }),
     all(() => comi().from('objetivos'), '*'),
+    all(() => comi().from('medidas'), '*', { col: 'orden' }),
     all(() => comi().from('compras'), '*', { col: 'fecha', asc: false }),
     all(() => comi().from('compra_items'), '*', { col: 'orden' })
   ]);
@@ -88,6 +89,7 @@ export async function cargarTodo() {
   return { gastos, ingresos, fijos, items, presupuestos, aparatos, planes, cultivos,
            categorias, recetas, alimentos, momentos, registro,
            planesComida: planesComida.map(p => ({ ...p, items: planItems.filter(i => i.plan_id === p.id) })),
+           medidas,
            objetivo: objetivos[0] || { kcal: 2000, proteina: 120 },
            compras: compras.map(c => ({ ...c, items: compraItems.filter(i => i.compra_id === c.id) })) };
 }
@@ -193,6 +195,9 @@ export async function addPlanItems(lista) {
   const { data, error } = await comi().from('plan_items').insert(lista).select();
   if (error) throw error; return data;
 }
+
+export const addMedida = (m)  => one(comi().from('medidas').insert(m));
+export const delMedida = (id) => comi().from('medidas').delete().eq('id', id);
 
 /* ── compras ── */
 export const addCompra    = (c)     => one(comi().from('compras').insert(c));
