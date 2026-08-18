@@ -1564,12 +1564,13 @@ function actualizaMacrosForm() {
 }
 
 /* Elegir ingrediente: del catálogo, o crearlo con sus macros al vuelo. */
-let ingIdx = null;
+/* No se crea la fila hasta que eliges: si cierras el panel sin elegir,
+   no queda un ingrediente en blanco. */
 function pickIngrediente() {
-  ingIdx = window._ings.length;
-  window._ings.push({ cantidad: null, unidad: '', nombre: '', nota: '', alimento_id: null });
+  window._iq = '';
   sheet('Añadir ingrediente', `<div id="ingbox"></div>`);
   pintaPickIng();
+  setTimeout(() => { const i = $('iq'); if (i) i.focus(); }, 60);
 }
 function pintaPickIng() {
   const box = $('ingbox'); if (!box) return;
@@ -1590,11 +1591,15 @@ function pintaPickIng() {
 }
 function elegirIng(id) {
   const a = D.alimentos.find(x => x.id === id);
-  const x = window._ings[ingIdx];
-  x.alimento_id = a.id; x.nombre = a.nombre; x.unidad = a.unidad;
-  x.cantidad = x.cantidad || a.porcion || 100;
+  if (!a) return;
+  // Si ya está en la receta, se suma la ración en vez de duplicar la línea
+  const ya = window._ings.find(x => x.alimento_id === a.id);
+  if (ya) ya.cantidad = (+ya.cantidad || 0) + (+a.porcion || 100);
+  else window._ings.push({ cantidad: +a.porcion || 100, unidad: a.unidad,
+                           nombre: a.nombre, nota: '', alimento_id: a.id });
   window._iq = '';
   close(); pintaIngs();
+  toast(ya ? `${a.nombre} · cantidad sumada` : `${a.nombre} añadido`);
 }
 /* Crear alimento sin salir del flujo: se pide lo mínimo. */
 function crearAlimentoRapido(destino) {
@@ -1622,7 +1627,7 @@ async function guardarAlimentoRapido() {
     D.alimentos.push(a);
     D.alimentos.sort((x, y) => x.nombre.localeCompare(y.nombre, 'es'));
     close();
-    if (window._destAli === 'ing') elegirIng(a.id);
+    if (window._destAli === 'ing') { elegirIng(a.id); return; }
     else { piSel = { t: 'a', id: a.id, n: a.nombre, u: a.unidad, p: a.porcion };
       await guardarPI(+a.porcion || 100); }
     toast('Alimento creado');
@@ -1659,7 +1664,7 @@ async function saveReceta(id) {
     proteina: parseFloat(val('rpr')) || (window._auto && window._auto.prot ? +window._auto.prot.toFixed(2) : null)
   };
   const ings = window._ings
-    .filter(x => (x.nombre || '').trim())
+    .filter(x => (x.nombre || '').trim() && (x.alimento_id || x.cantidad))
     .map(x => {
       const nom = x.nombre.trim();
       const al = D.alimentos.find(a => a.nombre.toLowerCase() === nom.toLowerCase());
