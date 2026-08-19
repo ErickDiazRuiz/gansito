@@ -2840,7 +2840,8 @@ document.addEventListener('click', async ev => {
   // Los campos de formulario nunca disparan acciones: si el clic nace en uno,
   // closest() podría subir a un ancestro con data-* y abrir un panel ajeno.
   if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
-  if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
+  // Zonas que no navegan (filas de formulario), pero sus botones sí funcionan
+  if (ev.target.closest('[data-stop]') && !ev.target.closest('button')) return;
 
   const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom],[data-piadd2],[data-copiadia],[data-ord],[data-alidel],[data-medadd],[data-meddel],[data-med],[data-imac],[data-imacsave]');
   if (!el) {
