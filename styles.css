@@ -204,6 +204,10 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .esc{display:flex;gap:3px;background:var(--sur2);border-radius:6px;padding:2px}
 .esc button{padding:3px 9px;border-radius:4px;font-size:11px;color:var(--tx3);font-family:'DM Mono',monospace}
 .esc button.on{background:var(--sur3);color:var(--chef)}
+.escin{width:38px;background:none;border:none;border-left:1px solid var(--bdr);border-radius:0;
+  padding:3px 6px;font-size:11px;text-align:center;color:var(--chef)}
+.escin:focus{outline:none;background:var(--sur3)}
+.escin::placeholder{color:var(--tx3)}
 
 .ing{display:flex;gap:10px;padding:6px 0;align-items:baseline}
 .ing+.ing{border-top:1px solid var(--bdr)}
@@ -217,6 +221,9 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--bdr2)}
 .fotobox:hover{border-color:var(--chef)}
 .ingrow{display:flex;gap:5px;margin-bottom:5px;align-items:center}
 .ingrow input{padding:7px 9px}
+.ingmac{width:26px;height:26px;flex:none;border-radius:6px;color:var(--tx3);font-size:12px}
+.ingmac:hover{background:var(--sur3);color:var(--comi)}
+.ingmac.falta{color:var(--task)}
 .ingdel{width:26px;height:30px;flex:none;color:var(--tx3);font-size:16px;line-height:1;border-radius:6px}
 .ingdel:hover{color:#E06A72;background:var(--sur2)}
 

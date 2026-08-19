@@ -1395,7 +1395,10 @@ function vReceta() {
         <button data-esc="0.5" class="${f === 0.5 ? 'on' : ''}">½</button>
         <button data-esc="1" class="${f === 1 ? 'on' : ''}">1×</button>
         <button data-esc="2" class="${f === 2 ? 'on' : ''}">2×</button>
-        <button data-esc="3" class="${f === 3 ? 'on' : ''}">3×</button></div></div>
+        <button data-esc="3" class="${f === 3 ? 'on' : ''}">3×</button>
+        <button data-esc="4" class="${f === 4 ? 'on' : ''}">4×</button>
+        <input id="escx" class="escin mono" inputmode="decimal" placeholder="×"
+          value="${[0.5, 1, 2, 3, 4].includes(f) ? '' : f}"></div></div>
     <div class="t2 mb">Para ${muestra} ${esc(r.unidad_rinde)}</div>
     ${r.ings.length ? `<div>${r.ings.map(i => `<div class="ing">
       <span class="icant mono">${i.cantidad != null
@@ -1563,7 +1566,9 @@ function pintaIngs() {
         <div class="inm">${esc(x.nombre || '—')}</div>
         <div class="t2">${m ? (enGramos ? '' : fmtCant(g) + ' ' + (al.unidad === 'u' ? 'ud' : al.unidad) + ' · ')
             + Math.round(m.kcal) + ' kcal · ' + m.prot.toFixed(1) + ' g'
-          : al ? 'pon la cantidad' : 'sin vincular · no cuenta en los macros'}</div></div>
+          : al ? 'sin macros · toca ✎ para ponerlos' : 'sin vincular · no cuenta en los macros'}</div></div>
+      ${al ? `<button class="ingmac ${+al.kcal ? '' : 'falta'}" data-imac="${al.id}"
+        aria-label="Editar macros de ${esc(al.nombre)}">✎</button>` : ''}
       <button class="ingdel" data-ingdel="${i}" aria-label="Quitar">×</button></div>`;
   }).join('');
   actualizaMacrosForm();
@@ -1589,6 +1594,40 @@ function actualizaMacrosForm() {
       <div style="font-size:17px;font-weight:700;font-family:'DM Mono',monospace;color:var(--comi)">${Math.round(k / por)} kcal</div>
       <div class="t2 mono" style="color:var(--cash)">${(p / por).toFixed(1)} g prot</div></div></div>
     ${sin ? `<div class="t2" style="margin-top:8px;text-align:center">${sin} ingrediente${sin > 1 ? 's' : ''} sin vincular no cuenta${sin > 1 ? 'n' : ''}.</div>` : ''}`;
+}
+
+/* Editar los macros del alimento sin salir de la receta: al construir
+   recetas es cuando descubres que a un alimento le faltan datos. */
+function formMacrosIng(alId) {
+  const a = D.alimentos.find(x => x.id === alId);
+  if (!a) return;
+  sheet(esc(a.nombre), `
+  <div class="t2 mb">Valores del envase, por ${a.unidad === 'u' ? 'unidad' : '100 ' + a.unidad}.</div>
+  <div class="fl">
+    <div class="fg grow"><label>Calorías</label>
+      <input id="imk" type="number" step="0.1" inputmode="decimal" class="mono" value="${+a.kcal || ''}" placeholder="0"></div>
+    <div class="fg grow"><label>Proteína g</label>
+      <input id="imp" type="number" step="0.1" inputmode="decimal" class="mono" value="${+a.proteina || ''}" placeholder="0"></div></div>
+  <div class="fg"><label>Medida base</label><select id="imu">
+    <option value="g" ${a.unidad === 'g' ? 'selected' : ''}>por 100 g</option>
+    <option value="ml" ${a.unidad === 'ml' ? 'selected' : ''}>por 100 ml</option>
+    <option value="u" ${a.unidad === 'u' ? 'selected' : ''}>por unidad</option></select></div>
+  <button class="btn" style="width:100%;background:var(--comi);color:#05231A;margin-top:8px"
+    data-imacsave="${alId}">Guardar en el catálogo</button>
+  <div class="t2" style="margin-top:8px">Se guarda en el alimento, así todas las recetas que lo usen se recalculan.</div>`, true);
+  setTimeout(() => $('imk').focus(), 60);
+}
+async function guardarMacrosIng(alId) {
+  const a = D.alimentos.find(x => x.id === alId);
+  const o = { kcal: parseFloat(val('imk')) || 0, proteina: parseFloat(val('imp')) || 0, unidad: val('imu') };
+  try {
+    const u = await api.editAlimento(alId, o);
+    Object.assign(a, u);
+    // El nombre de la unidad puede haber cambiado: refrescar las filas
+    window._ings.forEach(x => { if (x.alimento_id === alId) x.unidad = a.unidad; });
+    close(); pintaIngs();
+    toast(`${a.nombre} · ${Math.round(a.kcal)} kcal`);
+  } catch (e) { fallo(e); }
 }
 
 /* Elegir ingrediente: del catálogo, o crearlo con sus macros al vuelo. */
@@ -2803,7 +2842,7 @@ document.addEventListener('click', async ev => {
   if (ev.target.closest('input, select, textarea, label, datalist, option')) return;
   if (ev.target.closest('[data-stop]') && !ev.target.closest('[data-ingdel]')) return;
 
-  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom],[data-piadd2],[data-copiadia],[data-ord],[data-alidel],[data-medadd],[data-meddel],[data-med]');
+  const el = ev.target.closest('[data-go],[data-act],[data-tab],[data-per],[data-cat],[data-filt],[data-gasto],[data-frec],[data-ing],[data-fijo],[data-toggle],[data-pagar],[data-hist],[data-aparato],[data-tarea],[data-tarea-edit],[data-hecho],[data-stock],[data-plan],[data-cultivo],[data-registro],[data-save],[data-del],[data-tipo],[data-ico],[data-est],[data-mk],[data-vel],[data-dellog],[data-rec],[data-receta],[data-receta-edit],[data-rcat],[data-esc],[data-fav],[data-ingdel],[data-delcat],[data-tabc],[data-dia],[data-dc],[data-alim],[data-delreg],[data-delplan],[data-pick],[data-fr],[data-chk],[data-planed],[data-diaed],[data-delpi],[data-cargar],[data-pd],[data-rep],[data-piadd],[data-pitab],[data-pipick],[data-ipick],[data-comermom],[data-piadd2],[data-copiadia],[data-ord],[data-alidel],[data-medadd],[data-meddel],[data-med],[data-imac],[data-imacsave]');
   if (!el) {
     if (ev.target.classList.contains('ov')) close();
     return;
@@ -2862,6 +2901,8 @@ document.addEventListener('click', async ev => {
     return render(); }
   if (d.alidel) return borrarAliFila(+d.alidel);
   if (d.med) return formMedidas(+d.med);
+  if (d.imac) return formMacrosIng(+d.imac);
+  if (d.imacsave) return guardarMacrosIng(+d.imacsave);
   if (d.medadd) return addMedida(+d.medadd);
   if (d.meddel) return borrarMedida(+d.meddel);
   if (d.pd) { window._pd = +d.pd;
@@ -3005,6 +3046,10 @@ document.addEventListener('input', ev => {
     return;
   }
   if (t.id === 'rp') actualizaMacrosForm();
+  if (t.id === 'escx') { const v = parseFloat(t.value.replace(',', '.'));
+    if (v > 0 && v <= 50) { window._escala = v; const p = t.selectionStart; render();
+      const n = $('escx'); if (n) { n.focus(); n.setSelectionRange(p, p); } }
+    return; }
   if (t.id === 'rk') window._ovK = t.value !== '';
   if (t.id === 'rpr') window._ovP = t.value !== '';
 });
