@@ -32,7 +32,8 @@ const IC = {
   chef: '<path d="M7 20.5h10"/><path d="M7.6 16.8h8.8l.7-5.1a3.6 3.6 0 1 0-2.6-6.2 3.6 3.6 0 0 0-6.9 0 3.6 3.6 0 1 0-2.6 6.2z"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.2V12l3.2 2"/>',
   apple: '<path d="M12 8.2c-1.4-1.6-3-2.2-4.4-1.6C5.6 7.4 4.5 9.9 4.9 12.8c.5 3.4 2.7 7 4.6 7 .9 0 1.6-.5 2.5-.5s1.6.5 2.5.5c1.9 0 4.1-3.6 4.6-7 .4-2.9-.7-5.4-2.7-6.2-1.4-.6-3 0-4.4 1.6z"/><path d="M12 8.2V5.4a2.6 2.6 0 0 1 2.6-2.6"/>',
-  img: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="9.8" r="1.4"/><path d="m4 16.5 4.6-4a1.7 1.7 0 0 1 2.3.1l5 4.9M15 13.5l1.6-1.4a1.7 1.7 0 0 1 2.2 0L21 14"/>'
+  img: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="9.8" r="1.4"/><path d="m4 16.5 4.6-4a1.7 1.7 0 0 1 2.3.1l5 4.9M15 13.5l1.6-1.4a1.7 1.7 0 0 1 2.2 0L21 14"/>',
+  plan: '<rect x="3.5" y="4.5" width="17" height="16" rx="2.3"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/><path d="M7.5 13.5h3M13.5 13.5h3M7.5 17h3"/>'
 };
 const sv = (n, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w || 1.7}" stroke-linecap="round" stroke-linejoin="round">${IC[n] || IC.box}</svg>`;
 const ICONOS = ['coffee', 'bike', 'wash', 'tool', 'box'];
@@ -1873,13 +1874,29 @@ const totalDia = (p, d) => itemsDia(p, d).reduce((a, x) => {
   const m = macrosItem(x); return { kcal: a.kcal + m.kcal, prot: a.prot + m.prot };
 }, { kcal: 0, prot: 0 });
 
+/* Sin plan activo, Hoy / Compra / Alimentos no tienen de qué hablar:
+   el plan es lo que le da sentido a esos tres. Se activa un plan y
+   los tres se pueblan solos; se desactiva y vuelven a quedar en blanco. */
+function sinPlanActivo(msg) {
+  return `<div class="empty" style="padding:36px 20px">
+    <div style="margin-bottom:10px">${sv('plan', 2)}</div>
+    ${msg}
+    <button class="btn" style="background:var(--comi);color:#05231A;margin-top:14px" data-tabc="plan">Ir a Plan</button></div>`;
+}
+
 function vComidita() {
+  const activo = !!planActivo();
   return `<div class="view">
   <div class="hrow"><div class="h1">Comidita</div>
     <span class="sub mono">${Math.round(totalHoy().kcal)} kcal</span></div>
   <div class="ptabs">${TABSC.map(([k, l]) => `<button class="ptab ${tabc === k ? 'on' : ''}" data-tabc="${k}">${l}</button>`).join('')}</div>
-  ${tabc === 'hoy' ? cHoy() : tabc === 'plan' ? cPlan() : tabc === 'compra' ? cCompra() : cAlim()}
-  ${tabc === 'hoy' ? `<button class="fab" style="background:var(--comi);color:#05231A" data-act="comer" aria-label="Registrar comida">${sv('plus', 2)}</button>` : ''}</div>`;
+  ${tabc === 'plan' ? cPlan()
+    : !activo ? sinPlanActivo(
+        tabc === 'hoy' ? 'Sin plan activo. Activa uno para que Hoy sepa qué comes.'
+        : tabc === 'compra' ? 'Sin plan activo. La compra sale de él.'
+        : 'Sin plan activo. El catálogo se llena a partir de las recetas y alimentos del plan.')
+    : tabc === 'hoy' ? cHoy() : tabc === 'compra' ? cCompra() : cAlim()}
+  ${tabc === 'hoy' && activo ? `<button class="fab" style="background:var(--comi);color:#05231A" data-act="comer" aria-label="Registrar comida">${sv('plus', 2)}</button>` : ''}</div>`;
 }
 
 function cHoy() {
