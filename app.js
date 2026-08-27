@@ -1315,14 +1315,18 @@ const catCol = id => (D.categorias.find(c => c.id === id) || {}).color || 'var(-
 /* Caché de URLs firmadas: caducan a las 2 h y no queremos
    pedir una nueva por cada repintado. */
 const fotoCache = new Map();
+/* 'imagen' admite dos formas: una ruta de Storage (foto subida a mano) o
+   una URL http(s) directa (foto de referencia enlazada, sin subir nada).
+   Las URLs externas se usan tal cual, sin pedir firma a Supabase. */
 async function pintarFotos() {
   const nodos = document.querySelectorAll('[data-foto]:not([data-listo])');
   for (const n of nodos) {
     const p = n.dataset.foto;
     n.dataset.listo = '1';
     try {
-      let u = fotoCache.get(p);
-      if (!u) { u = await api.urlFoto(p); fotoCache.set(p, u); }
+      let u;
+      if (/^https?:\/\//i.test(p)) u = p;
+      else { u = fotoCache.get(p); if (!u) { u = await api.urlFoto(p); fotoCache.set(p, u); } }
       n.style.backgroundImage = `url("${u}")`;
       n.classList.add('cargada');
     } catch (_) { n.classList.add('rota'); }
@@ -1758,7 +1762,7 @@ async function borrarReceta(id) {
   const r = D.recetas.find(x => x.id === id);
   try {
     await api.delReceta(id);
-    if (r && r.imagen) api.borrarFoto(r.imagen).catch(() => {});
+    if (r && r.imagen && !/^https?:\/\//i.test(r.imagen)) api.borrarFoto(r.imagen).catch(() => {});
     D.recetas = D.recetas.filter(x => x.id !== id);
     toast('Receta eliminada');
     close(); go('chefcito');
@@ -3071,14 +3075,20 @@ $('tsun').onclick = async () => {
 };
 
 /* ══ render ══ */
+let vistaPrev = null;
 function render() {
   const acc = getComputedStyle(document.documentElement).getPropertyValue(ACC[view]).trim();
   document.documentElement.style.setProperty('--sweep', acc || '#52B788');
-  const s = $('scan'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go');
+  // El barrido marca un cambio de pantalla, no cada tecla que escribes
+  const cambio = view !== vistaPrev;
+  vistaPrev = view;
+  if (cambio) { const s = $('scan'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   const v = { home: vHome, cashito: vCashito, gansirato: vGansirato, aparato: vAparato,
               taskito: vTaskito, cultivo: vCultivo, chefcito: vChefcito, receta: vReceta,
               comidita: vComidita, plansito: vPlansito }[view];
-  $('app').innerHTML = v();
+  const app = $('app');
+  app.innerHTML = v();
+  if (!cambio) { const vw = app.querySelector('.view'); if (vw) vw.classList.add('quieto'); }
   $('mk').style.color = 'var(' + ACC[view] + ')';
   crumb(); drawer();
   if (view === 'gansirato') pintaPush();
